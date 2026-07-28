@@ -51,10 +51,10 @@ export default async function RootLayout({ children }: { children: React.ReactNo
         <header className="topbar">
           <Link href="/" className="brand">
             <span className="logo"><PumpJack /></span>
-            <span className="word">PSI Portal<span className="oil">OILFIELD SERVICES</span></span>
+            <span className="word">PSI Portal</span>
           </Link>
           <span className="crumb-sep">/</span>
-          <span className="crumb-app">Fluid End Turnaround</span>
+          <span className="crumb-app">Fluid End work orders</span>
           <span className="top-spacer" />
           <span className="top-user">Ahmed</span>
           <span className="lang"><span className="on">EN</span><span>ES</span></span>
