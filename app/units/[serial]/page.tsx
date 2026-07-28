@@ -23,7 +23,7 @@ export default async function UnitHistory({ params }: { params: { serial: string
           <h1 className="mono" style={{ fontSize: 22 }}>{unit.serialNumber}</h1>
           <p>{unit.manufacturer} · {unit.customer}{unit.model ? ` · ${unit.model}` : ""}</p>
         </div>
-        <Link href="/jobs/new" className="btn">+ New turnaround</Link>
+        <Link href="/jobs/new" className="btn">+ New work order</Link>
       </div>
 
       <div className="card">

@@ -37,7 +37,7 @@ export default async function Dashboard() {
           <h1>Turnaround dashboard</h1>
           <p>Digital turnaround records with dual PSI + operator sign-off.</p>
         </div>
-        <Link href="/jobs/new" className="btn">+ New turnaround</Link>
+        <Link href="/jobs/new" className="btn">+ New work order</Link>
       </div>
 
       <div className="stat-row">
@@ -62,7 +62,7 @@ export default async function Dashboard() {
             <span className="ic"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.7" strokeLinecap="round" strokeLinejoin="round"><path d="M14 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V8z"/><path d="M14 2v6h6M9 15h6M9 11h2"/></svg></span>
             <div className="big">No turnarounds yet</div>
             <div>Create your first digital turnaround record to get started.</div>
-            <div className="mt"><Link href="/jobs/new" className="btn">+ New turnaround</Link></div>
+            <div className="mt"><Link href="/jobs/new" className="btn">+ New work order</Link></div>
           </div>
         ) : (
           <table className="grid">

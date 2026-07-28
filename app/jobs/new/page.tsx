@@ -7,7 +7,7 @@ export default function NewTurnaround() {
     <>
       <div className="page-head">
         <div>
-          <h1>New turnaround</h1>
+          <h1>New work order</h1>
           <p>Capture the unit, work performed, and pressure test. You&apos;ll route it for signatures next.</p>
         </div>
         <Link href="/" className="btn secondary">Cancel</Link>

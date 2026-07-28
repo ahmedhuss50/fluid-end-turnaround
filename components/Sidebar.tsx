@@ -31,7 +31,7 @@ export default function Sidebar({ units, active }: { units: number; active: numb
     },
     {
       href: "/jobs/new",
-      label: "New Turnaround",
+      label: "New Work Order",
       count: null,
       icon: <><path d="M12 5v14" /><path d="M5 12h14" /></>,
     },
