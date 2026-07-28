@@ -1,6 +1,7 @@
 import Link from "next/link";
 import { createTurnaround } from "@/app/actions";
 import { WEAR_PARTS } from "@/lib/constants";
+import PressureTestField from "@/components/PressureTestField";
 
 export default function NewTurnaround() {
   return (
@@ -69,23 +70,10 @@ export default function NewTurnaround() {
         <div className="card">
           <div className="card-body">
             <div className="section-label">Pressure test</div>
-            <div className="grid-3">
-              <div className="field">
-                <label>Test pressure (psi)</label>
-                <input type="number" name="testPressurePsi" min="0" placeholder="e.g. 15000" />
-              </div>
-              <div className="field">
-                <label>Hold time (min)</label>
-                <input type="number" name="holdTimeMinutes" min="0" placeholder="e.g. 10" />
-              </div>
-              <div className="field">
-                <label>Result</label>
-                <select name="result" defaultValue="PASS">
-                  <option value="PASS">Pass</option>
-                  <option value="FAIL">Fail</option>
-                </select>
-              </div>
-            </div>
+            <p className="hint" style={{ marginTop: -8, marginBottom: 14 }}>
+              Run the live test below — the achieved pressure, hold time, and result fill in automatically (and stay editable).
+            </p>
+            <PressureTestField />
             <div className="grid-2">
               <div className="field">
                 <label>Instrument / transducer</label>
