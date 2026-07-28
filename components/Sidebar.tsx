@@ -35,6 +35,12 @@ export default function Sidebar({ units, active }: { units: number; active: numb
       count: null,
       icon: <><path d="M12 5v14" /><path d="M5 12h14" /></>,
     },
+    {
+      href: "/pressure-test",
+      label: "Pressure Test",
+      count: null,
+      icon: <><path d="M12 3a9 9 0 0 1 9 9" /><path d="M3 12a9 9 0 0 1 9-9" /><path d="M3 12a9 9 0 0 0 9 9 9 9 0 0 0 9-9" /><path d="M12 12l4-3" /><circle cx="12" cy="12" r="1.4" /></>,
+    },
   ];
 
   return (
