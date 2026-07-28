@@ -1,0 +1,32 @@
+{
+  "name": "fluid-end-turnaround",
+  "version": "0.1.0",
+  "private": true,
+  "description": "Fluid End Turnaround System — Phase 1 (digital turnaround form + dual e-signature)",
+  "scripts": {
+    "dev": "next dev",
+    "build": "prisma generate && prisma migrate deploy && next build",
+    "start": "next start",
+    "postinstall": "prisma generate",
+    "db:migrate": "prisma migrate dev",
+    "db:deploy": "prisma migrate deploy",
+    "db:seed": "node scripts/seed.mjs",
+    "setup": "prisma migrate deploy && node scripts/seed.mjs"
+  },
+  "dependencies": {
+    "@prisma/client": "5.22.0",
+    "@supabase/supabase-js": "^2.45.4",
+    "next": "14.2.15",
+    "pdf-lib": "1.17.1",
+    "react": "18.3.1",
+    "react-dom": "18.3.1"
+  },
+  "devDependencies": {
+    "@types/node": "20.14.10",
+    "@types/react": "18.3.3",
+    "@types/react-dom": "18.3.0",
+    "playwright-core": "^1.47.2",
+    "prisma": "5.22.0",
+    "typescript": "5.5.3"
+  }
+}

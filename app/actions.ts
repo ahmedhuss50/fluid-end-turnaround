@@ -1,0 +1,250 @@
+"use server";
+
+import { prisma } from "@/lib/db";
+import { JOB_STATUS, PARTY, TEST_RESULT } from "@/lib/constants";
+import { nextJobNumber, newToken, appBaseUrl, fullJobInclude } from "@/lib/jobs";
+import { getEsignProvider } from "@/lib/esign";
+import { generateCertificate } from "@/lib/certificate";
+import { revalidatePath } from "next/cache";
+import { redirect } from "next/navigation";
+
+function str(fd: FormData, key: string): string {
+  const v = fd.get(key);
+  return typeof v === "string" ? v.trim() : "";
+}
+
+/** Create a new turnaround record (status DRAFT) from the intake form. */
+export async function createTurnaround(formData: FormData) {
+  const serialNumber = str(formData, "serialNumber");
+  const manufacturer = str(formData, "manufacturer");
+  const customer = str(formData, "customer");
+  const technician = str(formData, "technician");
+
+  if (!serialNumber || !manufacturer || !customer || !technician) {
+    throw new Error("Serial number, manufacturer, customer, and technician are required.");
+  }
+
+  const parts = formData.getAll("parts").map(String).filter(Boolean);
+  const model = str(formData, "model") || null;
+  const notes = str(formData, "notes") || null;
+
+  // Pressure test
+  const testPressurePsi = parseInt(str(formData, "testPressurePsi") || "0", 10);
+  const holdTimeMinutes = parseInt(str(formData, "holdTimeMinutes") || "0", 10);
+  const result = str(formData, "result") === TEST_RESULT.FAIL ? TEST_RESULT.FAIL : TEST_RESULT.PASS;
+  const gauge = str(formData, "gauge") || null;
+  const testedBy = str(formData, "testedBy") || technician;
+
+  // Signers
+  const psiName = str(formData, "psiName") || technician;
+  const psiEmail = str(formData, "psiEmail") || null;
+  const opName = str(formData, "opName");
+  const opEmail = str(formData, "opEmail") || null;
+
+  // Upsert the fluid end (permanent unit record keyed by serial number).
+  const fluidEnd = await prisma.fluidEnd.upsert({
+    where: { serialNumber },
+    update: { manufacturer, customer, model: model ?? undefined },
+    create: { serialNumber, manufacturer, customer, model },
+  });
+
+  const jobNumber = await nextJobNumber();
+
+  const job = await prisma.turnaroundJob.create({
+    data: {
+      jobNumber,
+      fluidEndId: fluidEnd.id,
+      technician,
+      status: JOB_STATUS.DRAFT,
+      replacedParts: JSON.stringify(parts),
+      notes,
+      pressureTest: {
+        create: {
+          testPressurePsi: isNaN(testPressurePsi) ? 0 : testPressurePsi,
+          holdTimeMinutes: isNaN(holdTimeMinutes) ? 0 : holdTimeMinutes,
+          result,
+          gauge,
+          testedBy,
+        },
+      },
+      signatures: {
+        create: [
+          {
+            party: PARTY.PSI,
+            order: 1,
+            signerName: psiName,
+            signerRole: "PSI Technician",
+            signerEmail: psiEmail,
+            token: newToken(),
+          },
+          {
+            party: PARTY.PRO_PETRO,
+            order: 2,
+            signerName: opName || "Operator Representative",
+            signerRole: "Operator Representative",
+            signerEmail: opEmail,
+            token: newToken(),
+          },
+        ],
+      },
+    },
+  });
+
+  revalidatePath("/");
+  redirect(`/jobs/${job.id}`);
+}
+
+/** Route a DRAFT job for signatures (PSI first). */
+export async function sendForSignatures(jobId: string) {
+  const job = await prisma.turnaroundJob.findUnique({
+    where: { id: jobId },
+    include: fullJobInclude(),
+  });
+  if (!job) throw new Error("Job not found.");
+  if (job.status !== JOB_STATUS.DRAFT) return;
+
+  const provider = getEsignProvider();
+  const tokens: Record<number, string> = {};
+  job.signatures.forEach((s) => (tokens[s.order] = s.token));
+
+  const requests = await provider.createRequests({
+    jobId: job.id,
+    jobNumber: job.jobNumber,
+    appBaseUrl: appBaseUrl(),
+    signers: job.signatures.map((s) => ({
+      party: s.party as "PSI" | "PRO_PETRO",
+      order: s.order,
+      name: s.signerName,
+      role: s.signerRole,
+      email: s.signerEmail,
+    })),
+    tokens,
+  });
+
+  // Persist provider references.
+  await Promise.all(
+    requests.map((r) => {
+      const sig = job.signatures.find((s) => s.order === r.order);
+      if (!sig) return Promise.resolve();
+      return prisma.signature.update({
+        where: { id: sig.id },
+        data: { providerRef: r.providerRef ?? null },
+      });
+    })
+  );
+
+  await prisma.turnaroundJob.update({
+    where: { id: job.id },
+    data: { status: JOB_STATUS.AWAITING_PSI },
+  });
+
+  revalidatePath(`/jobs/${job.id}`);
+  revalidatePath("/");
+}
+
+/** Apply a signature via its token. Advances the workflow and, when both
+ *  parties have signed, generates the signed certificate and completes the job. */
+export async function applySignature(token: string, formData: FormData) {
+  const typedName = str(formData, "typedName");
+  const sig = await prisma.signature.findUnique({
+    where: { token },
+    include: { job: { include: fullJobInclude() } },
+  });
+  if (!sig) throw new Error("Signature link not found.");
+  if (sig.status === "SIGNED") {
+    redirect(`/sign/${token}?done=1`);
+  }
+
+  const job = sig.job;
+
+  // Enforce signing order: PSI (order 1) must sign before Pro Petro (order 2).
+  const priorPending = job.signatures.find(
+    (s) => s.order < sig.order && s.status !== "SIGNED"
+  );
+  if (priorPending) {
+    throw new Error("The PSI signature is required before the operator can sign.");
+  }
+
+  const auditMeta = JSON.stringify({
+    providerRef: sig.providerRef || `mock-${job.jobNumber}-${sig.order}`,
+    userAgent: str(formData, "_ua") || null,
+    method: process.env.ESIGN_PROVIDER || "mock",
+  });
+
+  await prisma.signature.update({
+    where: { id: sig.id },
+    data: {
+      status: "SIGNED",
+      signedAt: new Date(),
+      signerName: typedName || sig.signerName,
+      auditMeta,
+    },
+  });
+
+  // Recompute state.
+  const updated = await prisma.turnaroundJob.findUnique({
+    where: { id: job.id },
+    include: fullJobInclude(),
+  });
+  if (!updated) throw new Error("Job vanished.");
+
+  const allSigned = updated.signatures.every((s) => s.status === "SIGNED");
+
+  if (allSigned) {
+    const completedDate = new Date();
+    const certUrl = await generateCertificate({
+      jobNumber: updated.jobNumber,
+      serialNumber: updated.fluidEnd.serialNumber,
+      manufacturer: updated.fluidEnd.manufacturer,
+      customer: updated.fluidEnd.customer,
+      model: updated.fluidEnd.model,
+      technician: updated.technician,
+      intakeDate: updated.intakeDate,
+      completedDate,
+      replacedParts: safeParse(updated.replacedParts),
+      notes: updated.notes,
+      test: updated.pressureTest,
+      signatures: updated.signatures.map((s) => ({
+        party: s.party,
+        signerName: s.signerName,
+        signerRole: s.signerRole,
+        signedAt: s.signedAt,
+        auditMeta: s.auditMeta,
+      })),
+    });
+
+    await prisma.turnaroundJob.update({
+      where: { id: updated.id },
+      data: {
+        status: JOB_STATUS.COMPLETED,
+        completedDate,
+        certificateUrl: certUrl,
+      },
+    });
+  } else {
+    // Advance to the next pending party.
+    const nextPending = updated.signatures.find((s) => s.status !== "SIGNED");
+    await prisma.turnaroundJob.update({
+      where: { id: updated.id },
+      data: {
+        status:
+          nextPending && nextPending.party === PARTY.PRO_PETRO
+            ? JOB_STATUS.AWAITING_OPERATOR
+            : JOB_STATUS.AWAITING_PSI,
+      },
+    });
+  }
+
+  revalidatePath(`/jobs/${job.id}`);
+  revalidatePath("/");
+  redirect(`/sign/${token}?done=1`);
+}
+
+function safeParse(s: string): string[] {
+  try {
+    const v = JSON.parse(s);
+    return Array.isArray(v) ? v : [];
+  } catch {
+    return [];
+  }
+}

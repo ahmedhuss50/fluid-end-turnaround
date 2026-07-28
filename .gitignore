@@ -1,0 +1,10 @@
+node_modules
+.next
+out
+*.log
+.env
+.vercel
+prisma/dev.db
+prisma/dev.db-journal
+storage/certificates/*.pdf
+!storage/certificates/.gitkeep

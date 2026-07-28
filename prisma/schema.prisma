@@ -1,0 +1,78 @@
+// Fluid End Turnaround System — Phase 1 data model
+// Postgres (Supabase). DATABASE_URL is the pooled connection (pgbouncer, :6543)
+// used at runtime; DIRECT_URL is the direct connection (:5432) used for migrations.
+
+generator client {
+  provider = "prisma-client-js"
+}
+
+datasource db {
+  provider  = "postgresql"
+  url       = env("DATABASE_URL")
+  directUrl = env("DIRECT_URL")
+}
+
+/// A physical fluid end (the unit). Permanent record, keyed by serial number.
+model FluidEnd {
+  id           String          @id @default(cuid())
+  serialNumber String          @unique
+  manufacturer String
+  customer     String // owning operator, e.g. "Pro Petro"
+  model        String? // optional configuration / spec
+  tagId        String? // reserved for Phase 2 (RFID / barcode)
+  createdAt    DateTime        @default(now())
+  jobs         TurnaroundJob[]
+}
+
+/// One turnaround event for a fluid end.
+model TurnaroundJob {
+  id            String        @id @default(cuid())
+  jobNumber     String        @unique // human-friendly, e.g. "TA-2026-0007"
+  fluidEnd      FluidEnd      @relation(fields: [fluidEndId], references: [id])
+  fluidEndId    String
+  status        String        @default("DRAFT") // DRAFT | AWAITING_PSI | AWAITING_OPERATOR | COMPLETED
+  technician    String // PSI tech who performed the work
+  intakeDate    DateTime      @default(now())
+  completedDate DateTime?
+  replacedParts String        @default("[]") // JSON array of part keys
+  notes         String?
+  certificateUrl String?      // path to signed PDF once completed
+  createdAt     DateTime      @default(now())
+  updatedAt     DateTime      @updatedAt
+  pressureTest  PressureTest?
+  signatures    Signature[]
+}
+
+/// Pressure-test result attached to a job.
+model PressureTest {
+  id              String        @id @default(cuid())
+  job             TurnaroundJob @relation(fields: [jobId], references: [id], onDelete: Cascade)
+  jobId           String        @unique
+  testPressurePsi Int
+  holdTimeMinutes Int
+  result          String // PASS | FAIL
+  gauge           String? // instrument / transducer used
+  testedBy        String
+  testedAt        DateTime      @default(now())
+}
+
+/// One signature request/record. A completed job has two: PSI then Pro Petro.
+model Signature {
+  id          String        @id @default(cuid())
+  job         TurnaroundJob @relation(fields: [jobId], references: [id], onDelete: Cascade)
+  jobId       String
+  party       String // PSI | PRO_PETRO
+  order       Int // 1 = PSI, 2 = Pro Petro
+  signerName  String
+  signerRole  String?
+  signerEmail String?
+  status      String        @default("PENDING") // PENDING | SIGNED
+  token       String        @unique // opaque link token for signing
+  signedAt    DateTime?
+  auditIp     String?
+  auditMeta   String? // JSON: user agent, provider reference, etc.
+  providerRef String? // external e-sign provider envelope/document id
+  createdAt   DateTime      @default(now())
+
+  @@index([jobId])
+}
