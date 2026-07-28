@@ -56,6 +56,28 @@ model PressureTest {
   testedAt        DateTime      @default(now())
 }
 
+/// A client-submitted request to repair a fluid end. Carries the client's
+/// authorization signature. PSI converts it into a TurnaroundJob (work order).
+model RepairRequest {
+  id                String   @id @default(cuid())
+  requestNumber     String   @unique // e.g. RR-2026-0001
+  company           String // owning operator / client company
+  contactName       String
+  contactEmail      String?
+  contactPhone      String?
+  serialNumber      String
+  manufacturer      String
+  model             String?
+  problem           String // description of the issue / reason for repair
+  requestedService  String?
+  clientSignerName  String // authorization signature (typed)
+  clientSignerTitle String?
+  clientSignedAt    DateTime @default(now())
+  status            String   @default("SUBMITTED") // SUBMITTED | CONVERTED
+  jobId             String? // linked work order once converted
+  createdAt         DateTime @default(now())
+}
+
 /// One signature request/record. A completed job has two: PSI then Pro Petro.
 model Signature {
   id          String        @id @default(cuid())

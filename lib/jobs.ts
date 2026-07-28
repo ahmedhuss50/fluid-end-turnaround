@@ -14,6 +14,19 @@ export async function nextJobNumber(): Promise<string> {
   return `${prefix}${String(n).padStart(4, "0")}`;
 }
 
+/** Generates the next repair-request number, e.g. RR-2026-0007. */
+export async function nextRequestNumber(): Promise<string> {
+  const year = new Date().getUTCFullYear();
+  const prefix = `RR-${year}-`;
+  const last = await prisma.repairRequest.findFirst({
+    where: { requestNumber: { startsWith: prefix } },
+    orderBy: { requestNumber: "desc" },
+    select: { requestNumber: true },
+  });
+  const n = last ? parseInt(last.requestNumber.slice(prefix.length), 10) + 1 : 1;
+  return `${prefix}${String(n).padStart(4, "0")}`;
+}
+
 export function newToken(): string {
   return crypto.randomBytes(24).toString("base64url");
 }

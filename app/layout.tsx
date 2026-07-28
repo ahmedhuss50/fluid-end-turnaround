@@ -31,15 +31,18 @@ function PumpJack() {
 export default async function RootLayout({ children }: { children: React.ReactNode }) {
   let units = 0;
   let active = 0;
+  let requests = 0;
   try {
-    const [u, a] = await Promise.all([
+    const [u, a, r] = await Promise.all([
       prisma.fluidEnd.count(),
       prisma.turnaroundJob.count({
         where: { status: { in: [JOB_STATUS.DRAFT, JOB_STATUS.AWAITING_PSI, JOB_STATUS.AWAITING_OPERATOR] } },
       }),
+      prisma.repairRequest.count({ where: { status: "SUBMITTED" } }),
     ]);
     units = u;
     active = a;
+    requests = r;
   } catch {
     /* DB may be unavailable during build; render zero counts */
   }
@@ -61,7 +64,7 @@ export default async function RootLayout({ children }: { children: React.ReactNo
         </header>
 
         <div className="app">
-          <Sidebar units={units} active={active} />
+          <Sidebar units={units} active={active} requests={requests} />
           <div className="main">
             <div className="content">{children}</div>
           </div>

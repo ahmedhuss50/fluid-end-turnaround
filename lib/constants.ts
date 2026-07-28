@@ -31,6 +31,11 @@ export const TEST_RESULT = {
   FAIL: "FAIL",
 } as const;
 
+export const REQUEST_STATUS = {
+  SUBMITTED: "SUBMITTED",
+  CONVERTED: "CONVERTED",
+} as const;
+
 // Wear parts commonly replaced during a fluid-end turnaround.
 export const WEAR_PARTS: { key: string; label: string }[] = [
   { key: "valves", label: "Valves" },

@@ -3,7 +3,13 @@ import { createTurnaround } from "@/app/actions";
 import { WEAR_PARTS } from "@/lib/constants";
 import PressureTestField from "@/components/PressureTestField";
 
-export default function NewTurnaround() {
+export default function NewTurnaround({
+  searchParams,
+}: {
+  searchParams: { serial?: string; manufacturer?: string; customer?: string; model?: string; opName?: string; notes?: string; requestId?: string };
+}) {
+  const sp = searchParams || {};
+  const fromRequest = !!sp.requestId;
   return (
     <>
       <div className="page-head">
@@ -15,28 +21,34 @@ export default function NewTurnaround() {
       </div>
 
       <form action={createTurnaround} className="stack">
+        {fromRequest && <input type="hidden" name="requestId" value={sp.requestId} />}
+        {fromRequest && (
+          <div className="callout blue" style={{ marginBottom: 18 }}>
+            <span>Started from a client repair request — unit details are pre-filled. The client&apos;s authorization is on file; PSI &amp; the operator sign off at completion.</span>
+          </div>
+        )}
         <div className="card">
           <div className="card-body">
             <div className="section-label">Unit identity</div>
             <div className="grid-2">
               <div className="field">
                 <label>Serial number <span className="req">*</span></label>
-                <input type="text" name="serialNumber" required placeholder="e.g. FE-2200-00841" />
+                <input type="text" name="serialNumber" required placeholder="e.g. FE-2200-00841" defaultValue={sp.serial || ""} />
                 <div className="hint">Existing units are matched by serial number; new ones are created automatically.</div>
               </div>
               <div className="field">
                 <label>Manufacturer <span className="req">*</span></label>
-                <input type="text" name="manufacturer" required placeholder="e.g. SPM / Gardner Denver" />
+                <input type="text" name="manufacturer" required placeholder="e.g. SPM / Gardner Denver" defaultValue={sp.manufacturer || ""} />
               </div>
             </div>
             <div className="grid-2">
               <div className="field">
                 <label>Customer / operator <span className="req">*</span></label>
-                <input type="text" name="customer" required placeholder="e.g. Pro Petro" defaultValue="Pro Petro" />
+                <input type="text" name="customer" required placeholder="e.g. Pro Petro" defaultValue={sp.customer || "Pro Petro"} />
               </div>
               <div className="field">
                 <label>Model / spec</label>
-                <input type="text" name="model" placeholder="Optional configuration details" />
+                <input type="text" name="model" placeholder="Optional configuration details" defaultValue={sp.model || ""} />
               </div>
             </div>
           </div>
@@ -62,7 +74,7 @@ export default function NewTurnaround() {
             </div>
             <div className="field">
               <label>Notes</label>
-              <textarea name="notes" placeholder="Condition on intake, anything noteworthy about the rebuild…" />
+              <textarea name="notes" placeholder="Condition on intake, anything noteworthy about the rebuild…" defaultValue={sp.notes || ""} />
             </div>
           </div>
         </div>
@@ -103,7 +115,7 @@ export default function NewTurnaround() {
             <div className="grid-2">
               <div className="field">
                 <label>Operator (Pro Petro) signer name</label>
-                <input type="text" name="opName" placeholder="Field / QA representative" />
+                <input type="text" name="opName" placeholder="Field / QA representative" defaultValue={sp.opName || ""} />
               </div>
               <div className="field">
                 <label>Operator signer email</label>

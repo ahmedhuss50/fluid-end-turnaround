@@ -1,8 +1,8 @@
 "use server";
 
 import { prisma } from "@/lib/db";
-import { JOB_STATUS, PARTY, TEST_RESULT } from "@/lib/constants";
-import { nextJobNumber, newToken, appBaseUrl, fullJobInclude } from "@/lib/jobs";
+import { JOB_STATUS, PARTY, TEST_RESULT, REQUEST_STATUS } from "@/lib/constants";
+import { nextJobNumber, nextRequestNumber, newToken, appBaseUrl, fullJobInclude } from "@/lib/jobs";
 import { getEsignProvider } from "@/lib/esign";
 import { generateCertificate } from "@/lib/certificate";
 import { revalidatePath } from "next/cache";
@@ -90,8 +90,55 @@ export async function createTurnaround(formData: FormData) {
     },
   });
 
+  // If this work order was started from a client repair request, link them.
+  const requestId = str(formData, "requestId");
+  if (requestId) {
+    await prisma.repairRequest
+      .update({
+        where: { id: requestId },
+        data: { status: REQUEST_STATUS.CONVERTED, jobId: job.id },
+      })
+      .catch(() => {});
+    revalidatePath("/requests");
+  }
+
   revalidatePath("/");
   redirect(`/jobs/${job.id}`);
+}
+
+/** Submit a client repair request with the client's authorization signature. */
+export async function submitRepairRequest(formData: FormData) {
+  const company = str(formData, "company");
+  const contactName = str(formData, "contactName");
+  const serialNumber = str(formData, "serialNumber");
+  const manufacturer = str(formData, "manufacturer");
+  const problem = str(formData, "problem");
+  const clientSignerName = str(formData, "clientSignerName");
+
+  if (!company || !contactName || !serialNumber || !manufacturer || !problem || !clientSignerName) {
+    throw new Error("Company, contact, serial number, manufacturer, problem, and signature are required.");
+  }
+
+  const requestNumber = await nextRequestNumber();
+  await prisma.repairRequest.create({
+    data: {
+      requestNumber,
+      company,
+      contactName,
+      contactEmail: str(formData, "contactEmail") || null,
+      contactPhone: str(formData, "contactPhone") || null,
+      serialNumber,
+      manufacturer,
+      model: str(formData, "model") || null,
+      problem,
+      requestedService: str(formData, "requestedService") || null,
+      clientSignerName,
+      clientSignerTitle: str(formData, "clientSignerTitle") || null,
+    },
+  });
+
+  revalidatePath("/requests");
+  redirect("/requests?submitted=1");
 }
 
 /** Route a DRAFT job for signatures (PSI first). */

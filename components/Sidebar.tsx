@@ -11,7 +11,7 @@ function I({ d }: { d: React.ReactNode }) {
   );
 }
 
-export default function Sidebar({ units, active }: { units: number; active: number }) {
+export default function Sidebar({ units, active, requests }: { units: number; active: number; requests: number }) {
   const path = usePathname();
   const is = (href: string) =>
     href === "/" ? path === "/" : path.startsWith(href);
@@ -28,6 +28,12 @@ export default function Sidebar({ units, active }: { units: number; active: numb
       label: "Fluid Ends",
       count: units,
       icon: <><path d="M3 7l9-4 9 4-9 4-9-4Z" /><path d="M3 7v10l9 4 9-4V7" /><path d="M12 11v10" /></>,
+    },
+    {
+      href: "/requests",
+      label: "Repair Requests",
+      count: requests,
+      icon: <><path d="M9 4h6a1 1 0 0 1 1 1v1h2a1 1 0 0 1 1 1v13a1 1 0 0 1-1 1H6a1 1 0 0 1-1-1V7a1 1 0 0 1 1-1h2V5a1 1 0 0 1 1-1Z" /><path d="M9 6h6" /><path d="M9 12h6M9 16h4" /></>,
     },
     {
       href: "/jobs/new",
