@@ -49,6 +49,18 @@ export const DELIVERY_LABEL: Record<string, string> = {
   PICKUP: "PSI picks up",
 };
 
+export const OUTCOME = {
+  READY_PICKUP: "READY_PICKUP",
+  READY_DELIVERY: "READY_DELIVERY",
+  SCRAP: "SCRAP",
+} as const;
+
+export const OUTCOME_LABEL: Record<string, string> = {
+  READY_PICKUP: "Ready for pickup",
+  READY_DELIVERY: "Ready for delivery",
+  SCRAP: "Scrap — cannot repair",
+};
+
 // Wear parts commonly replaced during a fluid-end turnaround.
 export const WEAR_PARTS: { key: string; label: string }[] = [
   { key: "valves", label: "Valves" },

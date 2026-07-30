@@ -36,6 +36,8 @@ model TurnaroundJob {
   completedDate DateTime?
   replacedParts String        @default("[]") // JSON array of part keys
   notes         String?
+  inspectionNotes String?     // findings from the inspection stage
+  outcome         String?     // READY_PICKUP | READY_DELIVERY | SCRAP
   certificateUrl String?      // path to signed PDF once completed
   // Receiving / chain of custody (captured when PSI takes possession)
   deliveryMethod   String? // PICKUP (PSI collects) | DELIVERY (client drops off)

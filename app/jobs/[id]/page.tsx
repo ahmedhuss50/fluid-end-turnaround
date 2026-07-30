@@ -3,7 +3,7 @@ import { notFound } from "next/navigation";
 import { prisma } from "@/lib/db";
 import { fullJobInclude, appBaseUrl } from "@/lib/jobs";
 import { sendForSignatures } from "@/app/actions";
-import { JOB_STATUS, PART_LABEL, PARTY, PARTY_LABEL, DELIVERY_LABEL } from "@/lib/constants";
+import { JOB_STATUS, PART_LABEL, PARTY, PARTY_LABEL, DELIVERY_LABEL, OUTCOME_LABEL } from "@/lib/constants";
 import { StatusBadge, ResultBadge, SignBadge, fmtDate, fmtDateTime } from "@/components/ui";
 
 export const dynamic = "force-dynamic";
@@ -31,6 +31,11 @@ export default async function JobDetail({ params }: { params: { id: string } }) 
           <div className="flex" style={{ marginTop: 8 }}>
             <StatusBadge status={job.status} />
             {job.pressureTest && <ResultBadge result={job.pressureTest.result} />}
+            {job.outcome && (
+              <span className={`badge ${job.outcome === "SCRAP" ? "fail" : "completed"}`}>
+                {OUTCOME_LABEL[job.outcome] || job.outcome}
+              </span>
+            )}
           </div>
         </div>
         <div className="wrap-actions">
@@ -65,7 +70,8 @@ export default async function JobDetail({ params }: { params: { id: string } }) 
             <dt>Completed</dt><dd>{fmtDate(job.completedDate)}</dd>
             <dt>Replaced parts</dt>
             <dd>{parts.length ? parts.map((p) => PART_LABEL[p] || p).join(", ") : <span className="muted">None recorded</span>}</dd>
-            {job.notes && (<><dt>Notes</dt><dd>{job.notes}</dd></>)}
+            {job.inspectionNotes && (<><dt>Inspection</dt><dd>{job.inspectionNotes}</dd></>)}
+            {job.notes && (<><dt>Work notes</dt><dd>{job.notes}</dd></>)}
           </dl>
         </div>
       </div>

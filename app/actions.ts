@@ -27,6 +27,8 @@ export async function createTurnaround(formData: FormData) {
   const parts = formData.getAll("parts").map(String).filter(Boolean);
   const model = str(formData, "model") || null;
   const notes = str(formData, "notes") || null;
+  const inspectionNotes = str(formData, "inspectionNotes") || null;
+  const outcome = str(formData, "outcome") || null;
 
   // Pressure test
   const testPressurePsi = parseInt(str(formData, "testPressurePsi") || "0", 10);
@@ -63,6 +65,8 @@ export async function createTurnaround(formData: FormData) {
       status: JOB_STATUS.DRAFT,
       replacedParts: JSON.stringify(parts),
       notes,
+      inspectionNotes,
+      outcome,
       deliveryMethod,
       receivedByPsi,
       releasedByClient,
