@@ -1,19 +1,23 @@
 import Link from "next/link";
 import { prisma } from "@/lib/db";
-import { JOB_STATUS } from "@/lib/constants";
+import { JOB_STATUS, REQUEST_STATUS } from "@/lib/constants";
 import { StatusBadge, ResultBadge, fmtDate } from "@/components/ui";
 
 export const dynamic = "force-dynamic";
 
 export default async function Dashboard() {
-  const [jobs, unitCount, counts] = await Promise.all([
+  const [jobs, counts, openRequests] = await Promise.all([
     prisma.turnaroundJob.findMany({
       orderBy: { createdAt: "desc" },
       include: { fluidEnd: true, pressureTest: true },
       take: 50,
     }),
-    prisma.fluidEnd.count(),
     prisma.turnaroundJob.groupBy({ by: ["status"], _count: true }),
+    prisma.repairRequest.findMany({
+      where: { status: REQUEST_STATUS.SUBMITTED },
+      orderBy: { createdAt: "desc" },
+      take: 25,
+    }),
   ]);
 
   const byStatus = Object.fromEntries(counts.map((c) => [c.status, c._count]));
@@ -42,6 +46,9 @@ export default async function Dashboard() {
 
       <div className="stat-row">
         <div className="stat accent">
+          <div className="k">Awaiting requests</div><div className="v">{openRequests.length}</div><div className="sub">need a work order</div>
+        </div>
+        <div className="stat">
           <div className="k">This month</div><div className="v">{thisMonth}</div><div className="sub">of ~30 est. / month</div>
         </div>
         <div className="stat">
@@ -50,10 +57,50 @@ export default async function Dashboard() {
         <div className="stat">
           <div className="k">Completed</div><div className="v">{completed}</div><div className="sub">fully signed</div>
         </div>
-        <div className="stat">
-          <div className="k">Fluid ends tracked</div><div className="v">{unitCount}</div><div className="sub">unique units</div>
-        </div>
       </div>
+
+      {openRequests.length > 0 && (
+        <div className="card" style={{ marginBottom: 22 }}>
+          <div className="card-head">
+            <h2>Awaiting work order</h2>
+            <Link href="/requests" className="small">All requests →</Link>
+          </div>
+          <table className="grid">
+            <thead>
+              <tr>
+                <th>Request</th>
+                <th>Company</th>
+                <th>Serial #</th>
+                <th>Authorized by</th>
+                <th>Submitted</th>
+                <th></th>
+              </tr>
+            </thead>
+            <tbody>
+              {openRequests.map((r) => {
+                const params = new URLSearchParams({
+                  serial: r.serialNumber,
+                  manufacturer: r.manufacturer,
+                  customer: r.company,
+                  opName: r.contactName,
+                  notes: `Repair request ${r.requestNumber}: ${r.problem}`,
+                  requestId: r.id,
+                }).toString();
+                return (
+                  <tr key={r.id}>
+                    <td className="mono">{r.requestNumber}</td>
+                    <td>{r.company}</td>
+                    <td className="mono">{r.serialNumber}</td>
+                    <td>{r.clientSignerName}</td>
+                    <td className="small muted">{fmtDate(r.createdAt)}</td>
+                    <td className="right"><Link href={`/jobs/new?${params}`} className="btn secondary small">Start work order →</Link></td>
+                  </tr>
+                );
+              })}
+            </tbody>
+          </table>
+        </div>
+      )}
 
       <div className="card">
         <div className="card-head"><h2>Recent turnarounds</h2></div>
