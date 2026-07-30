@@ -37,6 +37,11 @@ model TurnaroundJob {
   replacedParts String        @default("[]") // JSON array of part keys
   notes         String?
   certificateUrl String?      // path to signed PDF once completed
+  // Receiving / chain of custody (captured when PSI takes possession)
+  deliveryMethod   String? // PICKUP (PSI collects) | DELIVERY (client drops off)
+  receivedByPsi    String? // PSI person who took possession (signature)
+  releasedByClient String? // client person who released it (signature)
+  receivedAt       DateTime?
   createdAt     DateTime      @default(now())
   updatedAt     DateTime      @updatedAt
   pressureTest  PressureTest?
@@ -73,6 +78,7 @@ model RepairRequest {
   clientSignerName  String // authorization signature (typed)
   clientSignerTitle String?
   clientSignedAt    DateTime @default(now())
+  deliveryMethod    String? // PICKUP (PSI collects) | DELIVERY (client drops off)
   status            String   @default("SUBMITTED") // SUBMITTED | CONVERTED
   jobId             String? // linked work order once converted
   createdAt         DateTime @default(now())

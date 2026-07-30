@@ -3,7 +3,7 @@ import { notFound } from "next/navigation";
 import { prisma } from "@/lib/db";
 import { fullJobInclude, appBaseUrl } from "@/lib/jobs";
 import { sendForSignatures } from "@/app/actions";
-import { JOB_STATUS, PART_LABEL, PARTY, PARTY_LABEL } from "@/lib/constants";
+import { JOB_STATUS, PART_LABEL, PARTY, PARTY_LABEL, DELIVERY_LABEL } from "@/lib/constants";
 import { StatusBadge, ResultBadge, SignBadge, fmtDate, fmtDateTime } from "@/components/ui";
 
 export const dynamic = "force-dynamic";
@@ -69,6 +69,20 @@ export default async function JobDetail({ params }: { params: { id: string } }) 
           </dl>
         </div>
       </div>
+
+      {(job.deliveryMethod || job.receivedByPsi || job.releasedByClient) && (
+        <div className="card">
+          <div className="card-head"><h2>Receiving — chain of custody</h2></div>
+          <div className="card-body">
+            <dl className="kv">
+              <dt>Delivery method</dt><dd>{job.deliveryMethod ? DELIVERY_LABEL[job.deliveryMethod] || job.deliveryMethod : "—"}</dd>
+              <dt>Released by (client)</dt><dd>{job.releasedByClient || "—"}</dd>
+              <dt>Received by (PSI)</dt><dd>{job.receivedByPsi || "—"}</dd>
+              <dt>Received at</dt><dd>{fmtDateTime(job.receivedAt)}</dd>
+            </dl>
+          </div>
+        </div>
+      )}
 
       <div className="card">
         <div className="card-head"><h2>Pressure test</h2></div>

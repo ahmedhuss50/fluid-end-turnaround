@@ -1,12 +1,12 @@
 import Link from "next/link";
 import { createTurnaround } from "@/app/actions";
-import { WEAR_PARTS, CUSTOMERS } from "@/lib/constants";
+import { WEAR_PARTS, CUSTOMERS, DELIVERY_METHOD } from "@/lib/constants";
 import PressureTestField from "@/components/PressureTestField";
 
 export default function NewTurnaround({
   searchParams,
 }: {
-  searchParams: { serial?: string; manufacturer?: string; customer?: string; model?: string; opName?: string; notes?: string; requestId?: string };
+  searchParams: { serial?: string; manufacturer?: string; customer?: string; model?: string; opName?: string; notes?: string; requestId?: string; deliveryMethod?: string };
 }) {
   const sp = searchParams || {};
   const fromRequest = !!sp.requestId;
@@ -52,6 +52,35 @@ export default function NewTurnaround({
                 <label>Model / spec</label>
                 <input type="text" name="model" placeholder="Optional configuration details" defaultValue={sp.model || ""} />
               </div>
+            </div>
+          </div>
+        </div>
+
+        <div className="card">
+          <div className="card-body">
+            <div className="section-label">Receiving — chain of custody</div>
+            <div className="grid-2">
+              <div className="field">
+                <label>How PSI received it</label>
+                <select name="deliveryMethod" defaultValue={sp.deliveryMethod || DELIVERY_METHOD.DELIVERY}>
+                  <option value={DELIVERY_METHOD.DELIVERY}>Client delivered to PSI</option>
+                  <option value={DELIVERY_METHOD.PICKUP}>PSI picked up</option>
+                </select>
+              </div>
+              <div className="field" />
+            </div>
+            <div className="grid-2">
+              <div className="field">
+                <label>Released / authorized by (client) — sign</label>
+                <input type="text" name="releasedByClient" className="sig-input" autoComplete="off" placeholder="Client representative" defaultValue={sp.opName || ""} />
+              </div>
+              <div className="field">
+                <label>Received by (PSI) — sign</label>
+                <input type="text" name="receivedByPsi" className="sig-input" autoComplete="off" placeholder="PSI technician taking possession" />
+              </div>
+            </div>
+            <div className="callout blue">
+              <span>This records who released the fluid end and who took possession for PSI, with a timestamp — the chain of custody at pickup / drop-off.</span>
             </div>
           </div>
         </div>

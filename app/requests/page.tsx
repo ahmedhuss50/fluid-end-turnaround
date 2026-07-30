@@ -1,7 +1,7 @@
 import Link from "next/link";
 import { prisma } from "@/lib/db";
 import { submitRepairRequest } from "@/app/actions";
-import { REQUEST_STATUS, CUSTOMERS } from "@/lib/constants";
+import { REQUEST_STATUS, CUSTOMERS, DELIVERY_METHOD } from "@/lib/constants";
 import { fmtDate } from "@/components/ui";
 
 export const dynamic = "force-dynamic";
@@ -78,6 +78,13 @@ export default async function RepairRequests({
               </div>
             </div>
             <div className="field">
+              <label>How will PSI receive it?</label>
+              <select name="deliveryMethod" defaultValue={DELIVERY_METHOD.DELIVERY}>
+                <option value={DELIVERY_METHOD.DELIVERY}>We&apos;ll deliver it to PSI</option>
+                <option value={DELIVERY_METHOD.PICKUP}>PSI picks it up from us</option>
+              </select>
+            </div>
+            <div className="field">
               <label>Problem / reason for repair <span className="req">*</span></label>
               <textarea name="problem" required placeholder="Describe the symptoms — leaks, washout, failed test, hours in service…" />
             </div>
@@ -133,6 +140,7 @@ export default async function RepairRequests({
                   opName: r.contactName,
                   notes: `Repair request ${r.requestNumber}: ${r.problem}`,
                   requestId: r.id,
+                  deliveryMethod: r.deliveryMethod || "",
                 }).toString();
                 return (
                   <tr key={r.id}>

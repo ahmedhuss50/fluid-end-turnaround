@@ -85,6 +85,7 @@ export default async function Dashboard() {
                   opName: r.contactName,
                   notes: `Repair request ${r.requestNumber}: ${r.problem}`,
                   requestId: r.id,
+                  deliveryMethod: r.deliveryMethod || "",
                 }).toString();
                 return (
                   <tr key={r.id}>

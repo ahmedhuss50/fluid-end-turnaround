@@ -39,6 +39,16 @@ export const REQUEST_STATUS = {
 // Managed list of customer / operator companies. Add new customers here.
 export const CUSTOMERS = ["Pro Petro"];
 
+export const DELIVERY_METHOD = {
+  DELIVERY: "DELIVERY", // client drops off at PSI
+  PICKUP: "PICKUP", // PSI collects from the client
+} as const;
+
+export const DELIVERY_LABEL: Record<string, string> = {
+  DELIVERY: "Client delivers to PSI",
+  PICKUP: "PSI picks up",
+};
+
 // Wear parts commonly replaced during a fluid-end turnaround.
 export const WEAR_PARTS: { key: string; label: string }[] = [
   { key: "valves", label: "Valves" },

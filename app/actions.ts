@@ -41,6 +41,11 @@ export async function createTurnaround(formData: FormData) {
   const opName = str(formData, "opName");
   const opEmail = str(formData, "opEmail") || null;
 
+  // Receiving / chain of custody
+  const deliveryMethod = str(formData, "deliveryMethod") || null;
+  const receivedByPsi = str(formData, "receivedByPsi") || null;
+  const releasedByClient = str(formData, "releasedByClient") || null;
+
   // Upsert the fluid end (permanent unit record keyed by serial number).
   const fluidEnd = await prisma.fluidEnd.upsert({
     where: { serialNumber },
@@ -58,6 +63,10 @@ export async function createTurnaround(formData: FormData) {
       status: JOB_STATUS.DRAFT,
       replacedParts: JSON.stringify(parts),
       notes,
+      deliveryMethod,
+      receivedByPsi,
+      releasedByClient,
+      receivedAt: receivedByPsi ? new Date() : null,
       pressureTest: {
         create: {
           testPressurePsi: isNaN(testPressurePsi) ? 0 : testPressurePsi,
@@ -134,6 +143,7 @@ export async function submitRepairRequest(formData: FormData) {
       requestedService: str(formData, "requestedService") || null,
       clientSignerName,
       clientSignerTitle: str(formData, "clientSignerTitle") || null,
+      deliveryMethod: str(formData, "deliveryMethod") || null,
     },
   });
 
