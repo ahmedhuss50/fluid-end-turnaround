@@ -2,10 +2,12 @@ import Link from "next/link";
 import { notFound } from "next/navigation";
 import { prisma } from "@/lib/db";
 import { StatusBadge, ResultBadge, fmtDate } from "@/components/ui";
+import { getRole } from "@/lib/role";
 
 export const dynamic = "force-dynamic";
 
 export default async function UnitHistory({ params }: { params: { serial: string } }) {
+  const isClient = getRole() === "client";
   const serial = decodeURIComponent(params.serial);
   const unit = await prisma.fluidEnd.findUnique({
     where: { serialNumber: serial },
@@ -23,7 +25,7 @@ export default async function UnitHistory({ params }: { params: { serial: string
           <h1 className="mono" style={{ fontSize: 22 }}>{unit.serialNumber}</h1>
           <p>{unit.manufacturer} · {unit.customer}{unit.model ? ` · ${unit.model}` : ""}</p>
         </div>
-        <Link href="/jobs/new" className="btn">+ New work order</Link>
+        {!isClient && <Link href="/jobs/new" className="btn">+ New work order</Link>}
       </div>
 
       <div className="card">

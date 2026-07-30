@@ -62,7 +62,7 @@ export default async function RootLayout({ children }: { children: React.ReactNo
           <span className="crumb-sep">/</span>
           <span className="crumb-app">Fluid End work orders</span>
           <span className="top-spacer" />
-          <span className="top-user">{role === "client" ? "Pro Petro" : "Ahmed · PSI"}</span>
+          <span className="top-user">{role === "client" ? "Client" : "Ahmed · PSI"}</span>
           <RoleSwitch role={role} />
           <span className="lang"><span className="on">EN</span><span>ES</span></span>
         </header>

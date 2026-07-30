@@ -1,10 +1,12 @@
 import Link from "next/link";
 import { prisma } from "@/lib/db";
+import { getRole } from "@/lib/role";
 import { fmtDate } from "@/components/ui";
 
 export const dynamic = "force-dynamic";
 
 export default async function Units() {
+  const isClient = getRole() === "client";
   const units = await prisma.fluidEnd.findMany({
     orderBy: { createdAt: "desc" },
     include: { _count: { select: { jobs: true } }, jobs: { orderBy: { createdAt: "desc" }, take: 1 } },
@@ -17,7 +19,7 @@ export default async function Units() {
           <h1>Fluid ends</h1>
           <p>Every tracked unit, keyed by serial number, with its turnaround history.</p>
         </div>
-        <Link href="/jobs/new" className="btn">+ New work order</Link>
+        {!isClient && <Link href="/jobs/new" className="btn">+ New work order</Link>}
       </div>
 
       <div className="card">
