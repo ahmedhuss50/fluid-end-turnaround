@@ -252,3 +252,8 @@ table.grid tbody tr:hover td { background: #faf8f3; }
 .notif-bell:hover { color: var(--red); border-color: var(--red-bg); }
 .notif-bell svg { width: 18px; height: 18px; }
 .notif-dot { position: absolute; top: -6px; right: -6px; min-width: 18px; height: 18px; padding: 0 4px; border-radius: 999px; background: var(--red); color: #fff; font-size: 11px; font-weight: 800; line-height: 18px; text-align: center; border: 2px solid #fff; }
+
+/* Invoice editor */
+.linkbtn { background: none; border: none; color: var(--muted); cursor: pointer; font-size: 14px; padding: 4px 6px; border-radius: 6px; }
+.linkbtn:hover { color: var(--red); background: var(--red-bg); }
+.grid td input { font-size: 13.5px; padding: 7px 9px; }

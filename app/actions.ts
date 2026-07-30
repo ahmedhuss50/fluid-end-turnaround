@@ -1,12 +1,14 @@
 "use server";
 
 import { prisma } from "@/lib/db";
-import { JOB_STATUS, PARTY, TEST_RESULT, REQUEST_STATUS, STAGE_ORDER } from "@/lib/constants";
-import { nextJobNumber, nextRequestNumber, nextHandoffNumber, newToken, appBaseUrl, fullJobInclude } from "@/lib/jobs";
+import { JOB_STATUS, PARTY, TEST_RESULT, REQUEST_STATUS, STAGE_ORDER, INVOICE_STATUS, PART_LABEL } from "@/lib/constants";
+import { nextJobNumber, nextRequestNumber, nextHandoffNumber, nextInvoiceNumber, newToken, appBaseUrl, fullJobInclude } from "@/lib/jobs";
 import { getEsignProvider } from "@/lib/esign";
 import { getStorage } from "@/lib/storage";
 import { generateCertificate } from "@/lib/certificate";
 import { notifyOperatorSignRequest, notifyOperatorCompleted } from "@/lib/notify";
+import { generateInvoicePdf } from "@/lib/invoice";
+import { dollarsToCents } from "@/lib/money";
 
 /** Upload a captured nameplate photo (if present) and return its storage key. */
 async function saveNameplate(formData: FormData, scope: "job" | "req", id: string): Promise<string | null> {
@@ -374,6 +376,10 @@ export async function applySignature(token: string, formData: FormData) {
       },
     });
 
+    // Issue the invoice (generate its PDF) before notifying, so the completion
+    // email can reference the invoice total and link.
+    await issueInvoiceForJob(updated.id);
+
     // Both parties signed — tell the operator the certificate is ready.
     await notifyOperatorCompleted(updated.id);
   } else {
@@ -409,4 +415,142 @@ function safeParse(s: string): string[] {
   } catch {
     return [];
   }
+}
+
+// ---------------------------------------------------------------------------
+// Invoicing
+// ---------------------------------------------------------------------------
+
+/** Default line items for a fresh invoice: a labor line + one line per replaced part. */
+function defaultInvoiceItems(replacedParts: string) {
+  const parts = safeParse(replacedParts);
+  const items: { description: string; quantity: number; unitPriceCents: number; order: number }[] = [
+    { description: "Labor — fluid-end service", quantity: 1, unitPriceCents: 0, order: 0 },
+  ];
+  parts.forEach((p, i) =>
+    items.push({ description: `Replace ${PART_LABEL[p] || p}`, quantity: 1, unitPriceCents: 0, order: i + 1 })
+  );
+  return items;
+}
+
+/** Build the data object and (re)render the invoice PDF; returns the served path. */
+async function renderInvoice(invoiceId: string): Promise<string | null> {
+  const inv = await prisma.invoice.findUnique({
+    where: { id: invoiceId },
+    include: {
+      items: { orderBy: { order: "asc" } },
+      job: { include: { fluidEnd: true, signatures: true } },
+    },
+  });
+  if (!inv) return null;
+  const opSig = inv.job.signatures.find((s) => s.party === PARTY.PRO_PETRO);
+  const url = await generateInvoicePdf({
+    invoiceNumber: inv.invoiceNumber,
+    issuedAt: inv.issuedAt || new Date(),
+    currency: inv.currency,
+    terms: inv.terms,
+    poNumber: inv.poNumber,
+    notes: inv.notes,
+    taxRatePct: inv.taxRatePct,
+    billToCompany: inv.job.fluidEnd.customer,
+    billToContact: opSig?.signerName || null,
+    jobNumber: inv.job.jobNumber,
+    serialNumber: inv.job.fluidEnd.serialNumber,
+    manufacturer: inv.job.fluidEnd.manufacturer,
+    completedDate: inv.job.completedDate,
+    items: inv.items.map((i) => ({
+      description: i.description,
+      quantity: i.quantity,
+      unitPriceCents: i.unitPriceCents,
+    })),
+  });
+  return url;
+}
+
+/** PSI saves/updates the invoice for a work order (line items, tax, terms, notes). */
+export async function saveInvoice(jobId: string, formData: FormData) {
+  const job = await prisma.turnaroundJob.findUnique({
+    where: { id: jobId },
+    include: { invoice: true },
+  });
+  if (!job) throw new Error("Work order not found.");
+
+  const descs = formData.getAll("desc").map(String);
+  const qtys = formData.getAll("qty").map(String);
+  const prices = formData.getAll("price").map(String);
+
+  const items = descs
+    .map((description, i) => ({
+      description: description.trim(),
+      quantity: parseFloat(qtys[i] || "1") || 0,
+      unitPriceCents: dollarsToCents(prices[i]),
+      order: i,
+    }))
+    .filter((it) => it.description.length > 0);
+
+  const taxRatePct = parseFloat(str(formData, "taxRatePct") || "0") || 0;
+  const terms = str(formData, "terms") || "Net 30";
+  const poNumber = str(formData, "poNumber") || null;
+  const notes = str(formData, "notes") || null;
+
+  // Upsert the invoice, then replace its line items.
+  let invoiceId = job.invoice?.id;
+  if (!invoiceId) {
+    const created = await prisma.invoice.create({
+      data: { jobId, invoiceNumber: await nextInvoiceNumber(), taxRatePct, terms, poNumber, notes },
+    });
+    invoiceId = created.id;
+  } else {
+    await prisma.invoice.update({
+      where: { id: invoiceId },
+      data: { taxRatePct, terms, poNumber, notes },
+    });
+    await prisma.invoiceItem.deleteMany({ where: { invoiceId } });
+  }
+  if (items.length) {
+    await prisma.invoiceItem.createMany({
+      data: items.map((it) => ({ ...it, invoiceId: invoiceId! })),
+    });
+  }
+
+  // If the invoice was already issued, regenerate the PDF so it stays in sync.
+  const inv = await prisma.invoice.findUnique({ where: { id: invoiceId } });
+  if (inv?.status === INVOICE_STATUS.ISSUED) {
+    const url = await renderInvoice(invoiceId);
+    if (url) await prisma.invoice.update({ where: { id: invoiceId }, data: { pdfUrl: url } });
+  }
+
+  revalidatePath(`/jobs/${jobId}`);
+  revalidatePath("/work-orders");
+}
+
+/** Ensure an issued invoice + PDF exists for a completed work order. */
+async function issueInvoiceForJob(jobId: string) {
+  const job = await prisma.turnaroundJob.findUnique({
+    where: { id: jobId },
+    include: { invoice: true },
+  });
+  if (!job) return;
+
+  let invoiceId = job.invoice?.id;
+  if (!invoiceId) {
+    // No invoice drafted — create one with default line items (at $0) so there is
+    // always an invoice to issue. PSI can fill amounts and re-issue afterward.
+    const created = await prisma.invoice.create({
+      data: {
+        jobId,
+        invoiceNumber: await nextInvoiceNumber(),
+        items: { create: defaultInvoiceItems(job.replacedParts) },
+      },
+    });
+    invoiceId = created.id;
+  }
+
+  const issuedAt = job.invoice?.issuedAt || new Date();
+  await prisma.invoice.update({
+    where: { id: invoiceId },
+    data: { status: INVOICE_STATUS.ISSUED, issuedAt },
+  });
+  const url = await renderInvoice(invoiceId);
+  if (url) await prisma.invoice.update({ where: { id: invoiceId }, data: { pdfUrl: url } });
 }

@@ -70,6 +70,12 @@ export const NOTIFY_TYPE = {
 // Fallback recipient shown in the demo email when no operator email is on file.
 export const DEMO_OPERATOR_EMAIL = "operations@propetro.com";
 
+export const INVOICE_STATUS = { DRAFT: "DRAFT", ISSUED: "ISSUED" } as const;
+export const INVOICE_STATUS_LABEL: Record<string, string> = {
+  DRAFT: "Draft",
+  ISSUED: "Issued",
+};
+
 export const HANDOFF_STATUS = { RELEASED: "RELEASED", RECEIVED: "RECEIVED" } as const;
 export const HANDOFF_LABEL: Record<string, string> = {
   RELEASED: "Released — awaiting PSI receipt",

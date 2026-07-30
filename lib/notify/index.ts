@@ -1,6 +1,7 @@
 import { prisma } from "@/lib/db";
 import { appBaseUrl } from "@/lib/jobs";
 import { PARTY, NOTIFY_TYPE, DEMO_OPERATOR_EMAIL, PART_LABEL } from "@/lib/constants";
+import { fmtMoney, computeTotals } from "@/lib/money";
 import { getMailer, type EmailMessage } from "./mailer";
 
 type JobForEmail = {
@@ -12,6 +13,12 @@ type JobForEmail = {
   certificateUrl: string | null;
   fluidEnd: { serialNumber: string; manufacturer: string; customer: string; model: string | null };
   signatures: { party: string; signerName: string; signerEmail: string | null; token: string; status: string }[];
+  invoice: {
+    invoiceNumber: string;
+    currency: string;
+    taxRatePct: number;
+    items: { quantity: number; unitPriceCents: number }[];
+  } | null;
 };
 
 function parts(job: JobForEmail): string {
@@ -25,10 +32,10 @@ function parts(job: JobForEmail): string {
 }
 
 /** Small inline-styled email shell so it renders identically in a real inbox. */
-function shell(opts: { heading: string; tint: string; bodyRows: string; ctaLabel?: string; ctaHref?: string; footnote: string }): string {
+function shell(opts: { heading: string; tint: string; bodyRows: string; ctaLabel?: string; ctaHref?: string; ctaExtra?: string; footnote: string }): string {
   const cta = opts.ctaLabel && opts.ctaHref
     ? `<tr><td style="padding:6px 0 4px;">
-         <a href="${opts.ctaHref}" style="display:inline-block;background:#c8102e;color:#ffffff;text-decoration:none;font-weight:700;font-size:15px;padding:12px 22px;border-radius:8px;">${opts.ctaLabel}</a>
+         <a href="${opts.ctaHref}" style="display:inline-block;background:#c8102e;color:#ffffff;text-decoration:none;font-weight:700;font-size:15px;padding:12px 22px;border-radius:8px;">${opts.ctaLabel}</a>${opts.ctaExtra || ""}
        </td></tr>`
     : "";
   return `<!doctype html><html><body style="margin:0;background:#f4f1ea;font-family:Segoe UI,Helvetica,Arial,sans-serif;color:#1b1b1f;">
@@ -99,22 +106,41 @@ function buildSignRequestEmail(job: JobForEmail, base: string) {
   return { subject, preview, html, toName, toEmail, signToken: op?.token || null };
 }
 
-/** Build the "completed — certificate ready" email. */
+/** Build the "completed — certificate + invoice ready" email. */
 function buildCompletedEmail(job: JobForEmail, base: string) {
   const op = job.signatures.find((s) => s.party === PARTY.PRO_PETRO);
   const toName = op?.signerName || "Operator Representative";
   const toEmail = op?.signerEmail || DEMO_OPERATOR_EMAIL;
   const certUrl = job.certificateUrl ? `${base}${job.certificateUrl}` : `${base}/jobs/${job.id}`;
-  const subject = `Certificate ready: work order ${job.jobNumber} completed`;
-  const preview = `Both parties signed ${job.jobNumber}. The signed certificate is ready to download.`;
+  const subject = `Certificate & invoice ready: work order ${job.jobNumber}`;
+  const preview = `Both parties signed ${job.jobNumber}. The signed certificate and invoice are ready.`;
+
+  let invoiceRows = "";
+  let invoiceCta = "";
+  let invoiceLine = "";
+  if (job.invoice) {
+    const { totalCents } = computeTotals(job.invoice.items, job.invoice.taxRatePct);
+    const totalStr = fmtMoney(totalCents, job.invoice.currency);
+    const invUrl = `${base}/invoice/${encodeURIComponent(job.invoice.invoiceNumber)}`;
+    invoiceRows =
+      row("Invoice", job.invoice.invoiceNumber, true) +
+      `<tr>
+        <td style="padding:9px 14px;color:#8b9099;font-size:12px;font-weight:700;text-transform:uppercase;letter-spacing:.03em;">Total due</td>
+        <td style="padding:9px 14px;font-size:16px;font-weight:800;color:#c8102e;">${totalStr}</td>
+      </tr>`;
+    invoiceCta = `<a href="${invUrl}" style="display:inline-block;margin-left:10px;background:#ffffff;color:#c8102e;text-decoration:none;font-weight:700;font-size:15px;padding:11px 20px;border-radius:8px;border:1px solid #c8102e;">View invoice →</a>`;
+    invoiceLine = ` An invoice (${job.invoice.invoiceNumber}, ${totalStr}) is attached to this record.`;
+  }
+
   const html = shell({
     heading: "Work order completed",
     tint: "#1e7a46",
-    bodyRows: unitRows(job),
-    ctaLabel: "Download signed certificate →",
+    bodyRows: unitRows(job) + invoiceRows,
+    ctaLabel: "Download certificate →",
     ctaHref: certUrl,
+    ctaExtra: invoiceCta,
     footnote:
-      `Both PSI and the operator have signed. A dual-signed certificate has been issued for your records. This notice was sent to ${toEmail}.`,
+      `Both PSI and the operator have signed. A dual-signed certificate has been issued for your records.${invoiceLine} This notice was sent to ${toEmail}.`,
   });
   return { subject, preview, html, toName, toEmail, signToken: null };
 }
@@ -122,7 +148,11 @@ function buildCompletedEmail(job: JobForEmail, base: string) {
 async function dispatch(jobId: string, type: string) {
   const job = (await prisma.turnaroundJob.findUnique({
     where: { id: jobId },
-    include: { fluidEnd: true, signatures: true },
+    include: {
+      fluidEnd: true,
+      signatures: true,
+      invoice: { include: { items: { orderBy: { order: "asc" } } } },
+    },
   })) as JobForEmail | null;
   if (!job) return;
 

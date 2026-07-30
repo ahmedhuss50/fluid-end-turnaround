@@ -2,6 +2,7 @@ import Link from "next/link";
 import { prisma } from "@/lib/db";
 import { getRole } from "@/lib/role";
 import { JOB_STATUS, PARTY, PART_LABEL, OUTCOME_LABEL } from "@/lib/constants";
+import { fmtMoney, computeTotals } from "@/lib/money";
 import { ResultBadge, fmtDate } from "@/components/ui";
 
 export const dynamic = "force-dynamic";
@@ -31,7 +32,7 @@ export default async function OperatorWorkOrders() {
     prisma.turnaroundJob.findMany({
       where: { status: JOB_STATUS.COMPLETED },
       orderBy: { completedDate: "desc" },
-      include: { fluidEnd: true, pressureTest: true },
+      include: { fluidEnd: true, pressureTest: true, invoice: { include: { items: true } } },
       take: 25,
     }),
   ]);
@@ -112,17 +113,27 @@ export default async function OperatorWorkOrders() {
                 <th>Serial #</th>
                 <th>Outcome</th>
                 <th>Test</th>
+                <th>Invoice</th>
                 <th>Completed</th>
                 <th></th>
               </tr>
             </thead>
             <tbody>
-              {completed.map((j) => (
+              {completed.map((j) => {
+                const invTotal = j.invoice ? computeTotals(j.invoice.items, j.invoice.taxRatePct).totalCents : null;
+                return (
                 <tr key={j.id}>
                   <td className="mono">{j.jobNumber}</td>
                   <td className="mono">{j.fluidEnd.serialNumber}</td>
                   <td>{j.outcome ? <span className={`badge ${j.outcome === "SCRAP" ? "fail" : "completed"}`}>{OUTCOME_LABEL[j.outcome] || j.outcome}</span> : "—"}</td>
                   <td>{j.pressureTest ? <ResultBadge result={j.pressureTest.result} /> : "—"}</td>
+                  <td>
+                    {j.invoice && j.invoice.pdfUrl ? (
+                      <a href={j.invoice.pdfUrl} className="mono small" target="_blank" rel="noopener">{fmtMoney(invTotal || 0, j.invoice.currency)} ↓</a>
+                    ) : (
+                      <span className="muted small">—</span>
+                    )}
+                  </td>
                   <td className="small muted">{fmtDate(j.completedDate)}</td>
                   <td className="right">
                     {j.certificateUrl ? (
@@ -132,7 +143,8 @@ export default async function OperatorWorkOrders() {
                     )}
                   </td>
                 </tr>
-              ))}
+                );
+              })}
             </tbody>
           </table>
         )}

@@ -51,6 +51,40 @@ model TurnaroundJob {
   pressureTest  PressureTest?
   signatures    Signature[]
   notifications Notification[]
+  invoice       Invoice?
+}
+
+/// A single invoice for a completed work order. PSI enters the line items and
+/// amounts; the PDF is issued automatically when the work order completes.
+model Invoice {
+  id            String        @id @default(cuid())
+  invoiceNumber String        @unique // e.g. INV-2026-0001
+  job           TurnaroundJob @relation(fields: [jobId], references: [id], onDelete: Cascade)
+  jobId         String        @unique
+  status        String        @default("DRAFT") // DRAFT | ISSUED
+  currency      String        @default("USD")
+  taxRatePct    Float         @default(0) // e.g. 8.25 (percent)
+  notes         String?
+  terms         String?       @default("Net 30")
+  poNumber      String? // client purchase-order reference
+  pdfUrl        String? // path to the issued PDF
+  issuedAt      DateTime?
+  createdAt     DateTime      @default(now())
+  updatedAt     DateTime      @updatedAt
+  items         InvoiceItem[]
+}
+
+/// One line on an invoice. Prices are stored in integer cents to avoid float drift.
+model InvoiceItem {
+  id             String  @id @default(cuid())
+  invoice        Invoice @relation(fields: [invoiceId], references: [id], onDelete: Cascade)
+  invoiceId      String
+  description    String
+  quantity       Float   @default(1)
+  unitPriceCents Int     @default(0)
+  order          Int     @default(0)
+
+  @@index([invoiceId])
 }
 
 /// A portal notification + the (mock) email that was dispatched for it.

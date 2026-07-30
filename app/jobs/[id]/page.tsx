@@ -3,24 +3,31 @@ import { notFound } from "next/navigation";
 import { prisma } from "@/lib/db";
 import { fullJobInclude, appBaseUrl } from "@/lib/jobs";
 import { sendForSignatures } from "@/app/actions";
+import { getRole } from "@/lib/role";
 import { JOB_STATUS, PART_LABEL, PARTY, PARTY_LABEL, DELIVERY_LABEL, OUTCOME_LABEL } from "@/lib/constants";
+import { fmtMoney, computeTotals } from "@/lib/money";
 import { StatusBadge, ResultBadge, SignBadge, fmtDate, fmtDateTime } from "@/components/ui";
+import InvoiceEditor from "@/components/InvoiceEditor";
 
 export const dynamic = "force-dynamic";
 
 export default async function JobDetail({ params }: { params: { id: string } }) {
   const job = await prisma.turnaroundJob.findUnique({
     where: { id: params.id },
-    include: fullJobInclude(),
+    include: { ...fullJobInclude(), invoice: { include: { items: { orderBy: { order: "asc" } } } } },
   });
   if (!job) notFound();
 
+  const isClient = getRole() === "client";
   const parts: string[] = safeParse(job.replacedParts);
   const base = appBaseUrl();
   const psiSig = job.signatures.find((s) => s.party === PARTY.PSI);
   const opSig = job.signatures.find((s) => s.party === PARTY.PRO_PETRO);
   const isDraft = job.status === JOB_STATUS.DRAFT;
   const isComplete = job.status === JOB_STATUS.COMPLETED;
+
+  const inv = job.invoice;
+  const invTotals = inv ? computeTotals(inv.items, inv.taxRatePct) : null;
 
   return (
     <>
@@ -111,6 +118,69 @@ export default async function JobDetail({ params }: { params: { id: string } }) 
             </dl>
           ) : (
             <p className="muted">No pressure test recorded.</p>
+          )}
+        </div>
+      </div>
+
+      <div className="card">
+        <div className="card-head">
+          <h2>Invoice</h2>
+          {inv && (
+            <span className={`badge ${inv.status === "ISSUED" ? "completed" : "draft"}`}>
+              <span className="d" />{inv.status === "ISSUED" ? "Issued" : "Draft"}
+            </span>
+          )}
+        </div>
+        <div className="card-body">
+          {isClient ? (
+            inv && inv.status === "ISSUED" ? (
+              <>
+                <dl className="kv">
+                  <dt>Invoice #</dt><dd className="mono">{inv.invoiceNumber}</dd>
+                  <dt>Issued</dt><dd>{fmtDate(inv.issuedAt)}</dd>
+                  <dt>Terms</dt><dd>{inv.terms || "Net 30"}</dd>
+                  <dt>Total due</dt><dd style={{ fontWeight: 800, color: "var(--red)" }}>{fmtMoney(invTotals!.totalCents, inv.currency)}</dd>
+                </dl>
+                {inv.pdfUrl && (
+                  <div style={{ marginTop: 12 }}>
+                    <a href={inv.pdfUrl} className="btn secondary small" target="_blank" rel="noopener">↓ Download invoice PDF</a>
+                  </div>
+                )}
+              </>
+            ) : (
+              <p className="muted">The invoice will be available here once the work order is completed.</p>
+            )
+          ) : (
+            <>
+              {!isComplete && (
+                <div className="callout blue" style={{ marginBottom: 16 }}>
+                  <span>Enter line items and amounts now. The invoice PDF is issued automatically when the work order completes — or save it as a draft any time.</span>
+                </div>
+              )}
+              <InvoiceEditor
+                jobId={job.id}
+                invoiceNumber={inv?.invoiceNumber ?? null}
+                status={inv?.status ?? "DRAFT"}
+                pdfUrl={inv?.pdfUrl ?? null}
+                currency={inv?.currency ?? "USD"}
+                taxRatePct={inv?.taxRatePct ?? 0}
+                terms={inv?.terms ?? "Net 30"}
+                poNumber={inv?.poNumber ?? ""}
+                notes={inv?.notes ?? ""}
+                items={
+                  inv && inv.items.length
+                    ? inv.items.map((it) => ({
+                        description: it.description,
+                        quantity: it.quantity,
+                        unitPrice: it.unitPriceCents ? (it.unitPriceCents / 100).toFixed(2) : "",
+                      }))
+                    : [
+                        { description: "Labor — fluid-end service", quantity: 1, unitPrice: "" },
+                        ...parts.map((p) => ({ description: `Replace ${PART_LABEL[p] || p}`, quantity: 1, unitPrice: "" })),
+                      ]
+                }
+              />
+            </>
           )}
         </div>
       </div>

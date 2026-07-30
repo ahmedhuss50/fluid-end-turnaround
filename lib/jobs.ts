@@ -27,6 +27,19 @@ export async function nextRequestNumber(): Promise<string> {
   return `${prefix}${String(n).padStart(4, "0")}`;
 }
 
+/** Generates the next invoice number, e.g. INV-2026-0007. */
+export async function nextInvoiceNumber(): Promise<string> {
+  const year = new Date().getUTCFullYear();
+  const prefix = `INV-${year}-`;
+  const last = await prisma.invoice.findFirst({
+    where: { invoiceNumber: { startsWith: prefix } },
+    orderBy: { invoiceNumber: "desc" },
+    select: { invoiceNumber: true },
+  });
+  const n = last ? parseInt(last.invoiceNumber.slice(prefix.length), 10) + 1 : 1;
+  return `${prefix}${String(n).padStart(4, "0")}`;
+}
+
 /** Generates the next handoff number, e.g. HO-2026-0007. */
 export async function nextHandoffNumber(): Promise<string> {
   const year = new Date().getUTCFullYear();
