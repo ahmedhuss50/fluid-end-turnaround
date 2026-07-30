@@ -33,7 +33,6 @@ export default function Sidebar({ units, active, requests, role }: { units: numb
     { href: "/requests", label: "Repair Requests", count: requests, icon: ICON.requests },
     { href: "/handoffs", label: "Release / Receive", count: null, icon: ICON.handoff },
     { href: "/jobs/new", label: "New Work Order", count: null, icon: ICON.plus },
-    { href: "/pressure-test", label: "Pressure Test", count: null, icon: ICON.gauge },
   ];
 
   // Client view: submit + track + release only.
