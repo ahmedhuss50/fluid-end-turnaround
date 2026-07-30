@@ -1,7 +1,7 @@
 import Link from "next/link";
 import { prisma } from "@/lib/db";
 import { submitRepairRequest } from "@/app/actions";
-import { REQUEST_STATUS } from "@/lib/constants";
+import { REQUEST_STATUS, CUSTOMERS } from "@/lib/constants";
 import { fmtDate } from "@/components/ui";
 
 export const dynamic = "force-dynamic";
@@ -36,7 +36,9 @@ export default async function RepairRequests({
             <div className="grid-2">
               <div className="field">
                 <label>Company (fluid-end owner) <span className="req">*</span></label>
-                <input type="text" name="company" required placeholder="e.g. Pro Petro" defaultValue="Pro Petro" />
+                <select name="company" required defaultValue={CUSTOMERS[0]}>
+                  {CUSTOMERS.map((c) => <option key={c} value={c}>{c}</option>)}
+                </select>
               </div>
               <div className="field">
                 <label>Contact name <span className="req">*</span></label>

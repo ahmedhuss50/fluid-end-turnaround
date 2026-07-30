@@ -36,6 +36,9 @@ export const REQUEST_STATUS = {
   CONVERTED: "CONVERTED",
 } as const;
 
+// Managed list of customer / operator companies. Add new customers here.
+export const CUSTOMERS = ["Pro Petro"];
+
 // Wear parts commonly replaced during a fluid-end turnaround.
 export const WEAR_PARTS: { key: string; label: string }[] = [
   { key: "valves", label: "Valves" },

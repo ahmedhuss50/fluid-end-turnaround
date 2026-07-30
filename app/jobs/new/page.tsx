@@ -1,6 +1,6 @@
 import Link from "next/link";
 import { createTurnaround } from "@/app/actions";
-import { WEAR_PARTS } from "@/lib/constants";
+import { WEAR_PARTS, CUSTOMERS } from "@/lib/constants";
 import PressureTestField from "@/components/PressureTestField";
 
 export default function NewTurnaround({
@@ -44,7 +44,9 @@ export default function NewTurnaround({
             <div className="grid-2">
               <div className="field">
                 <label>Customer / operator <span className="req">*</span></label>
-                <input type="text" name="customer" required placeholder="e.g. Pro Petro" defaultValue={sp.customer || "Pro Petro"} />
+                <select name="customer" required defaultValue={sp.customer || CUSTOMERS[0]}>
+                  {CUSTOMERS.map((c) => <option key={c} value={c}>{c}</option>)}
+                </select>
               </div>
               <div className="field">
                 <label>Model / spec</label>
