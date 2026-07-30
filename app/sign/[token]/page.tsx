@@ -33,7 +33,7 @@ export default async function SignPage({
   return (
     <div className="signbox">
       <div className="sign-doc">
-        <div className="band">Fluid End Turnaround — {job.jobNumber}</div>
+        <div className="band">Fluid End Work Order — {job.jobNumber}</div>
         <div className="card-body">
           <dl className="kv">
             <dt>Serial number</dt><dd className="mono">{job.fluidEnd.serialNumber}</dd>
@@ -64,7 +64,7 @@ export default async function SignPage({
               <strong>Signed.</strong> Thank you, {sig.signerName}. Your signature has been recorded
               {sig.party === PARTY.PRO_PETRO ? " and the certificate has been issued." : "."}
               <div style={{ marginTop: 10 }}>
-                <Link href={`/jobs/${job.id}`} className="btn secondary small">View turnaround record →</Link>
+                <Link href={`/jobs/${job.id}`} className="btn secondary small">View work order record →</Link>
               </div>
             </div>
           ) : priorPending ? (
@@ -94,7 +94,7 @@ export default async function SignPage({
         </div>
       </div>
       <p className="small muted" style={{ textAlign: "center", marginTop: 14 }}>
-        Fluid End Turnaround System · signing via {process.env.ESIGN_PROVIDER || "mock"} provider
+        Fluid End Work Order System · signing via {process.env.ESIGN_PROVIDER || "mock"} provider
       </p>
     </div>
   );

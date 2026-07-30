@@ -42,7 +42,7 @@ export default async function UnitHistory({ params }: { params: { serial: string
       </div>
 
       <div className="stat-row">
-        <div className="stat accent"><div className="k">Turnarounds</div><div className="v">{jobs.length}</div><div className="sub">on record</div></div>
+        <div className="stat accent"><div className="k">Work orders</div><div className="v">{jobs.length}</div><div className="sub">on record</div></div>
         <div className="stat"><div className="k">Completed</div><div className="v">{completed}</div><div className="sub">signed off</div></div>
         <div className="stat"><div className="k">Pressure-test pass rate</div><div className="v">{passRate}</div><div className="sub">{tested.length} tested</div></div>
         <div className="stat"><div className="k">Last intake</div><div className="v" style={{ fontSize: 20 }}>{latest ? fmtDate(latest.intakeDate) : "—"}</div><div className="sub">{latest ? `latest: ${latest.jobNumber}` : "no jobs yet"}</div></div>
@@ -72,9 +72,9 @@ export default async function UnitHistory({ params }: { params: { serial: string
       </div>
 
       <div className="card">
-        <div className="card-head"><h2>Turnaround history ({jobs.length})</h2></div>
+        <div className="card-head"><h2>Work order history ({jobs.length})</h2></div>
         {jobs.length === 0 ? (
-          <div className="empty"><div className="big">No turnarounds recorded for this unit.</div></div>
+          <div className="empty"><div className="big">No work orders recorded for this unit.</div></div>
         ) : (
           <table className="grid">
             <thead>

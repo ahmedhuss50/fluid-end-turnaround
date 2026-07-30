@@ -1,10 +1,10 @@
 import { prisma } from "./db";
 import crypto from "node:crypto";
 
-/** Generates the next human-friendly job number, e.g. TA-2026-0007. */
+/** Generates the next human-friendly job number, e.g. WO-2026-0007. */
 export async function nextJobNumber(): Promise<string> {
   const year = new Date().getUTCFullYear();
-  const prefix = `TA-${year}-`;
+  const prefix = `WO-${year}-`;
   const last = await prisma.turnaroundJob.findFirst({
     where: { jobNumber: { startsWith: prefix } },
     orderBy: { jobNumber: "desc" },

@@ -32,7 +32,7 @@ page.on("response", (r) => { if (r.status() >= 500) log.push("HTTP " + r.status(
 try {
   // 1. Dashboard
   await page.goto(BASE, { waitUntil: "networkidle" });
-  ok(await page.getByText("Turnaround dashboard").count() > 0, "dashboard loads");
+  ok(await page.getByText("Work order dashboard").count() > 0, "dashboard loads");
   // Find a DRAFT job: scan job links, open each, stop at the first with a Send button.
   const hrefs = await page.locator('a.mono[href^="/jobs/"]').evaluateAll((els) =>
     els.map((e) => e.getAttribute("href"))

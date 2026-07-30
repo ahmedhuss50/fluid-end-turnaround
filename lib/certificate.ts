@@ -41,7 +41,7 @@ function fmt(d: Date) {
 }
 
 /**
- * Generates a signed turnaround certificate PDF and writes it to
+ * Generates a signed work order certificate PDF and writes it to
  * public/certificates/<jobNumber>.pdf. Returns the public path.
  */
 export async function generateCertificate(data: CertData): Promise<string> {
@@ -72,10 +72,10 @@ export async function generateCertificate(data: CertData): Promise<string> {
 
   // Header
   page.drawRectangle({ x: 0, y: 762, width, height: 30, color: BLUE });
-  text("FLUID END TURNAROUND CERTIFICATE", M, 771, 13, bold, rgb(1, 1, 1));
+  text("FLUID END WORK ORDER CERTIFICATE", M, 771, 13, bold, rgb(1, 1, 1));
 
   y = 726;
-  text("Turnaround record & dual acceptance", M, y, 10, font, GREY);
+  text("Work order record & dual acceptance", M, y, 10, font, GREY);
   text(`Certificate No.  ${data.jobNumber}`, width - M - 190, y, 10, bold, INK);
   y -= 14;
   hr(y);
@@ -235,7 +235,7 @@ export async function generateCertificate(data: CertData): Promise<string> {
   hr(y);
   y -= 16;
   text(
-    "This certificate was generated electronically by the Fluid End Turnaround System.",
+    "This certificate was generated electronically by the Fluid End Work Order System.",
     M,
     y,
     8,

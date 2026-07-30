@@ -12,8 +12,8 @@ const inter = Inter({ subsets: ["latin"], variable: "--font-inter", display: "sw
 const slab = Roboto_Slab({ subsets: ["latin"], weight: ["600", "700"], variable: "--font-slab", display: "swap" });
 
 export const metadata: Metadata = {
-  title: "PSI Portal — Fluid End Turnaround",
-  description: "Digital turnaround documentation with dual e-signature.",
+  title: "PSI Portal — Fluid End Work Orders",
+  description: "Digital work order documentation with dual e-signature.",
 };
 
 export default async function RootLayout({ children }: { children: React.ReactNode }) {

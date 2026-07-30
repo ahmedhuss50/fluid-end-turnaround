@@ -17,7 +17,7 @@ export default async function Units() {
       <div className="page-head">
         <div>
           <h1>Fluid ends</h1>
-          <p>Every tracked unit, keyed by serial number, with its turnaround history.</p>
+          <p>Every tracked unit, keyed by serial number, with its work order history.</p>
         </div>
         {!isClient && <Link href="/jobs/new" className="btn">+ New work order</Link>}
       </div>
@@ -27,7 +27,7 @@ export default async function Units() {
         {units.length === 0 ? (
           <div className="empty">
             <div className="big">No units yet</div>
-            <div>Units are created automatically when you record a turnaround.</div>
+            <div>Units are created automatically when you record a work order.</div>
           </div>
         ) : (
           <table className="grid">
@@ -36,7 +36,7 @@ export default async function Units() {
                 <th>Serial #</th>
                 <th>Manufacturer</th>
                 <th>Customer</th>
-                <th>Turnarounds</th>
+                <th>Work orders</th>
                 <th>Last intake</th>
                 <th>Tag</th>
               </tr>

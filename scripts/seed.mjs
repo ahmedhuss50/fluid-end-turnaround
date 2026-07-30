@@ -1,4 +1,4 @@
-// Seeds demo data: a few fluid ends and turnarounds in various states.
+// Seeds demo data: a few fluid ends and work orders in various states.
 // Run with: npm run db:seed   (or `npm run setup` to push schema + seed)
 import { PrismaClient } from "@prisma/client";
 import crypto from "node:crypto";
@@ -23,7 +23,7 @@ async function main() {
 
   const year = new Date().getUTCFullYear();
   let seq = 0;
-  const jobNo = () => `TA-${year}-${String(++seq).padStart(4, "0")}`;
+  const jobNo = () => `WO-${year}-${String(++seq).padStart(4, "0")}`;
 
   // 1) Draft
   await prisma.turnaroundJob.create({
@@ -88,7 +88,7 @@ async function main() {
     },
   });
 
-  console.log(`Seeded ${units.length} fluid ends and ${seq} turnarounds.`);
+  console.log(`Seeded ${units.length} fluid ends and ${seq} work orders.`);
 }
 
 main()

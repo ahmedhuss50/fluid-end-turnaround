@@ -78,7 +78,7 @@ export default async function RepairRequests({
               </div>
               <div className="field">
                 <label>Requested service</label>
-                <input type="text" name="requestedService" placeholder="e.g. Full turnaround, pressure test" />
+                <input type="text" name="requestedService" placeholder="e.g. Full service, pressure test" />
               </div>
             </div>
             <div className="field">
