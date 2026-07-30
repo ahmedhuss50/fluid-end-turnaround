@@ -107,6 +107,7 @@ model Handoff {
   receivedByName String?
   receivedAt     DateTime?
   status         String    @default("RELEASED") // RELEASED | RECEIVED
+  requestId      String? // optional link to the repair request this unit came from
   createdAt      DateTime  @default(now())
 }
 

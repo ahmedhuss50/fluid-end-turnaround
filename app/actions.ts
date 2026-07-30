@@ -216,6 +216,7 @@ export async function createRelease(formData: FormData) {
       releasedByName,
       releasedByTitle: str(formData, "releasedByTitle") || null,
       status: "RELEASED",
+      requestId: str(formData, "requestId") || null,
     },
   });
   revalidatePath("/handoffs");

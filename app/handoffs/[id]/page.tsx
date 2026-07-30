@@ -12,6 +12,9 @@ export default async function HandoffDetail({ params }: { params: { id: string }
   const h = await prisma.handoff.findUnique({ where: { id: params.id } });
   if (!h) notFound();
   const isClient = getRole() === "client";
+  const linkedRequest = h.requestId
+    ? await prisma.repairRequest.findUnique({ where: { id: h.requestId }, select: { requestNumber: true } })
+    : null;
   const received = h.status === HANDOFF_STATUS.RECEIVED;
 
   const woParams = new URLSearchParams({
@@ -42,6 +45,7 @@ export default async function HandoffDetail({ params }: { params: { id: string }
             <dt>Manufacturer</dt><dd>{h.manufacturer || "—"}</dd>
             <dt>Customer</dt><dd>{h.customer}</dd>
             <dt>Delivery method</dt><dd>{h.deliveryMethod ? DELIVERY_LABEL[h.deliveryMethod] || h.deliveryMethod : "—"}</dd>
+            {linkedRequest && (<><dt>From request</dt><dd><Link href="/requests" className="mono">{linkedRequest.requestNumber}</Link></dd></>)}
             {h.conditionNotes && (<><dt>Condition at release</dt><dd>{h.conditionNotes}</dd></>)}
           </dl>
         </div>

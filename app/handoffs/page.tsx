@@ -10,7 +10,21 @@ export const dynamic = "force-dynamic";
 
 export default async function Handoffs({ searchParams }: { searchParams: { released?: string } }) {
   const isClient = getRole() === "client";
-  const handoffs = await prisma.handoff.findMany({ orderBy: { createdAt: "desc" }, take: 50 });
+  const [handoffs, openRequests] = await Promise.all([
+    prisma.handoff.findMany({ orderBy: { createdAt: "desc" }, take: 50 }),
+    isClient
+      ? prisma.repairRequest.findMany({
+          where: { status: "SUBMITTED" },
+          orderBy: { createdAt: "desc" },
+          select: { id: true, requestNumber: true, serialNumber: true, manufacturer: true, company: true, deliveryMethod: true, problem: true },
+        })
+      : Promise.resolve([]),
+  ]);
+
+  const requestOptions = openRequests.map((r) => ({
+    id: r.id, requestNumber: r.requestNumber, serialNumber: r.serialNumber,
+    manufacturer: r.manufacturer, customer: r.company, deliveryMethod: r.deliveryMethod, problem: r.problem,
+  }));
 
   return (
     <>
@@ -35,7 +49,7 @@ export default async function Handoffs({ searchParams }: { searchParams: { relea
               <p className="hint" style={{ marginTop: -4 }}>Fill in the unit details, then sign to release it to PSI.</p>
             </div>
           </div>
-          <ReleaseForm customer={CUSTOMERS[0]} />
+          <ReleaseForm customer={CUSTOMERS[0]} requests={requestOptions} />
         </>
       )}
 
