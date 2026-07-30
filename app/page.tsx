@@ -1,11 +1,15 @@
 import Link from "next/link";
+import { redirect } from "next/navigation";
 import { prisma } from "@/lib/db";
 import { JOB_STATUS, REQUEST_STATUS } from "@/lib/constants";
+import { getRole } from "@/lib/role";
 import { StatusBadge, ResultBadge, fmtDate } from "@/components/ui";
 
 export const dynamic = "force-dynamic";
 
 export default async function Dashboard() {
+  // The dashboard is PSI-facing; clients land on their requests.
+  if (getRole() === "client") redirect("/requests");
   const [jobs, counts, openRequests] = await Promise.all([
     prisma.turnaroundJob.findMany({
       orderBy: { createdAt: "desc" },

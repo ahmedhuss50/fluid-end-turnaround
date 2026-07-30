@@ -4,7 +4,9 @@ import { Inter, Roboto_Slab } from "next/font/google";
 import Link from "next/link";
 import { prisma } from "@/lib/db";
 import { JOB_STATUS } from "@/lib/constants";
+import { getRole } from "@/lib/role";
 import Sidebar from "@/components/Sidebar";
+import RoleSwitch from "@/components/RoleSwitch";
 
 const inter = Inter({ subsets: ["latin"], variable: "--font-inter", display: "swap" });
 const slab = Roboto_Slab({ subsets: ["latin"], weight: ["600", "700"], variable: "--font-slab", display: "swap" });
@@ -29,6 +31,7 @@ function PumpJack() {
 }
 
 export default async function RootLayout({ children }: { children: React.ReactNode }) {
+  const role = getRole();
   let units = 0;
   let active = 0;
   let requests = 0;
@@ -59,12 +62,13 @@ export default async function RootLayout({ children }: { children: React.ReactNo
           <span className="crumb-sep">/</span>
           <span className="crumb-app">Fluid End work orders</span>
           <span className="top-spacer" />
-          <span className="top-user">Ahmed</span>
+          <span className="top-user">{role === "client" ? "Pro Petro" : "Ahmed · PSI"}</span>
+          <RoleSwitch role={role} />
           <span className="lang"><span className="on">EN</span><span>ES</span></span>
         </header>
 
         <div className="app">
-          <Sidebar units={units} active={active} requests={requests} />
+          <Sidebar units={units} active={active} requests={requests} role={role} />
           <div className="main">
             <div className="content">{children}</div>
           </div>

@@ -2,6 +2,7 @@ import Link from "next/link";
 import { prisma } from "@/lib/db";
 import { submitRepairRequest } from "@/app/actions";
 import { REQUEST_STATUS, CUSTOMERS, DELIVERY_METHOD } from "@/lib/constants";
+import { getRole } from "@/lib/role";
 import { fmtDate } from "@/components/ui";
 
 export const dynamic = "force-dynamic";
@@ -11,6 +12,7 @@ export default async function RepairRequests({
 }: {
   searchParams: { submitted?: string };
 }) {
+  const isClient = getRole() === "client";
   const requests = await prisma.repairRequest.findMany({ orderBy: { createdAt: "desc" }, take: 50 });
 
   return (
@@ -112,7 +114,7 @@ export default async function RepairRequests({
       </form>
 
       <div className="card">
-        <div className="card-head"><h2>Incoming requests</h2></div>
+        <div className="card-head"><h2>{isClient ? "Your requests" : "Incoming requests"}</h2></div>
         {requests.length === 0 ? (
           <div className="empty">
             <div className="big">No repair requests yet</div>
@@ -159,8 +161,12 @@ export default async function RepairRequests({
                     </td>
                     <td className="right">
                       {r.status === REQUEST_STATUS.CONVERTED && r.jobId
-                        ? <Link href={`/jobs/${r.jobId}`} className="small">View work order →</Link>
-                        : <Link href={`/jobs/new?${params}`} className="btn secondary small">Start work order →</Link>}
+                        ? (isClient
+                            ? <span className="small muted">In progress</span>
+                            : <Link href={`/jobs/${r.jobId}`} className="small">View work order →</Link>)
+                        : (isClient
+                            ? <span className="small muted">Awaiting PSI</span>
+                            : <Link href={`/jobs/new?${params}`} className="btn secondary small">Start work order →</Link>)}
                     </td>
                   </tr>
                 );

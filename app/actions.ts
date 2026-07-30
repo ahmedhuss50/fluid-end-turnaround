@@ -7,6 +7,13 @@ import { getEsignProvider } from "@/lib/esign";
 import { generateCertificate } from "@/lib/certificate";
 import { revalidatePath } from "next/cache";
 import { redirect } from "next/navigation";
+import { cookies } from "next/headers";
+
+/** Switch the current view between PSI and client (Pro Petro). */
+export async function setRole(role: string) {
+  cookies().set("role", role === "client" ? "client" : "psi", { path: "/", maxAge: 60 * 60 * 24 * 30 });
+  revalidatePath("/", "layout");
+}
 
 function str(fd: FormData, key: string): string {
   const v = fd.get(key);
