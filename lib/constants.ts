@@ -61,6 +61,15 @@ export const OUTCOME_LABEL: Record<string, string> = {
   SCRAP: "Scrap — cannot repair",
 };
 
+// Portal / email notifications sent to the operator (Pro Petro) portal.
+export const NOTIFY_TYPE = {
+  SIGN_REQUEST: "SIGN_REQUEST", // PSI signed — operator's countersignature is now requested
+  COMPLETED: "COMPLETED", // both parties signed — certificate is ready
+} as const;
+
+// Fallback recipient shown in the demo email when no operator email is on file.
+export const DEMO_OPERATOR_EMAIL = "operations@propetro.com";
+
 export const HANDOFF_STATUS = { RELEASED: "RELEASED", RECEIVED: "RECEIVED" } as const;
 export const HANDOFF_LABEL: Record<string, string> = {
   RELEASED: "Released — awaiting PSI receipt",

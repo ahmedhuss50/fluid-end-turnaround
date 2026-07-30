@@ -50,6 +50,29 @@ model TurnaroundJob {
   updatedAt     DateTime      @updatedAt
   pressureTest  PressureTest?
   signatures    Signature[]
+  notifications Notification[]
+}
+
+/// A portal notification + the (mock) email that was dispatched for it.
+/// Recipient is a party ("PRO_PETRO" = the operator/client portal, "PSI").
+model Notification {
+  id         String        @id @default(cuid())
+  job        TurnaroundJob @relation(fields: [jobId], references: [id], onDelete: Cascade)
+  jobId      String
+  recipient  String        // party who should see it: PRO_PETRO | PSI
+  type       String        // SIGN_REQUEST | COMPLETED
+  subject    String        // email + inbox subject line
+  preview    String        // short summary shown in the inbox list
+  emailHtml  String        // rendered HTML body of the exact email sent
+  toName     String?       // recipient display name
+  toEmail    String?       // recipient email address (may be blank in demo)
+  signToken  String?       // token deep-linking to the operator's signing page
+  read       Boolean       @default(false)
+  emailedAt  DateTime?     // when the (mock) email was dispatched
+  createdAt  DateTime      @default(now())
+
+  @@index([recipient, read])
+  @@index([jobId])
 }
 
 /// Pressure-test result attached to a job.

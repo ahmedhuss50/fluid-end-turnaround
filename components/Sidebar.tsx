@@ -11,7 +11,7 @@ function I({ d }: { d: React.ReactNode }) {
   );
 }
 
-export default function Sidebar({ units, active, requests, role }: { units: number; active: number; requests: number; role?: string }) {
+export default function Sidebar({ units, active, requests, awaitingSignoff, notifications, role }: { units: number; active: number; requests: number; awaitingSignoff: number; notifications: number; role?: string }) {
   const path = usePathname();
   const is = (href: string) =>
     href === "/" ? path === "/" : path.startsWith(href);
@@ -24,6 +24,8 @@ export default function Sidebar({ units, active, requests, role }: { units: numb
     gauge: <><path d="M12 3a9 9 0 0 1 9 9" /><path d="M3 12a9 9 0 0 1 9-9" /><path d="M3 12a9 9 0 0 0 9 9 9 9 0 0 0 9-9" /><path d="M12 12l4-3" /><circle cx="12" cy="12" r="1.4" /></>,
     board: <><rect x="3" y="3" width="6" height="18" rx="1" /><rect x="10" y="3" width="6" height="12" rx="1" /><rect x="17" y="3" width="4" height="16" rx="1" /></>,
     handoff: <><path d="M7 8l-4 4 4 4" /><path d="M3 12h11" /><path d="M17 16l4-4-4-4" /><path d="M21 12H10" /></>,
+    check: <><path d="M9 11l3 3L22 4" /><path d="M21 12v7a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2V5a2 2 0 0 1 2-2h11" /></>,
+    bell: <><path d="M18 8a6 6 0 0 0-12 0c0 7-3 9-3 9h18s-3-2-3-9" /><path d="M13.7 21a2 2 0 0 1-3.4 0" /></>,
   };
 
   const psiItems = [
@@ -35,9 +37,11 @@ export default function Sidebar({ units, active, requests, role }: { units: numb
     { href: "/jobs/new", label: "New Work Order", count: null, icon: ICON.plus },
   ];
 
-  // Client view: submit + track + release only.
+  // Client view: submit + track + sign off + release.
   const clientItems = [
     { href: "/requests", label: "Submit / Track Requests", count: requests, icon: ICON.requests },
+    { href: "/work-orders", label: "Work Orders", count: awaitingSignoff, icon: ICON.check },
+    { href: "/notifications", label: "Notifications", count: notifications, icon: ICON.bell },
     { href: "/handoffs", label: "Release a Unit", count: null, icon: ICON.handoff },
     { href: "/units", label: "My Fluid Ends", count: units, icon: ICON.units },
   ];

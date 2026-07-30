@@ -6,6 +6,7 @@ import { nextJobNumber, nextRequestNumber, nextHandoffNumber, newToken, appBaseU
 import { getEsignProvider } from "@/lib/esign";
 import { getStorage } from "@/lib/storage";
 import { generateCertificate } from "@/lib/certificate";
+import { notifyOperatorSignRequest, notifyOperatorCompleted } from "@/lib/notify";
 
 /** Upload a captured nameplate photo (if present) and return its storage key. */
 async function saveNameplate(formData: FormData, scope: "job" | "req", id: string): Promise<string | null> {
@@ -34,6 +35,16 @@ export async function advanceStage(jobId: string) {
     await prisma.turnaroundJob.update({ where: { id: jobId }, data: { stage: next } });
     revalidatePath("/board");
   }
+}
+
+/** Mark all of a recipient's portal notifications as read (clears the bell count). */
+export async function markNotificationsRead(recipient: string) {
+  await prisma.notification.updateMany({
+    where: { recipient, read: false },
+    data: { read: true },
+  });
+  revalidatePath("/notifications");
+  revalidatePath("/", "layout");
 }
 
 /** Switch the current view between PSI and client (Pro Petro). */
@@ -362,19 +373,29 @@ export async function applySignature(token: string, formData: FormData) {
         certificateUrl: certUrl,
       },
     });
+
+    // Both parties signed — tell the operator the certificate is ready.
+    await notifyOperatorCompleted(updated.id);
   } else {
     // Advance to the next pending party.
     const nextPending = updated.signatures.find((s) => s.status !== "SIGNED");
+    const awaitingOperator = nextPending && nextPending.party === PARTY.PRO_PETRO;
     await prisma.turnaroundJob.update({
       where: { id: updated.id },
       data: {
-        status:
-          nextPending && nextPending.party === PARTY.PRO_PETRO
-            ? JOB_STATUS.AWAITING_OPERATOR
-            : JOB_STATUS.AWAITING_PSI,
+        status: awaitingOperator ? JOB_STATUS.AWAITING_OPERATOR : JOB_STATUS.AWAITING_PSI,
       },
     });
+
+    // PSI just signed — surface the work order on the operator (Pro Petro)
+    // portal and send the "please countersign" notification + email.
+    if (awaitingOperator && sig.party === PARTY.PSI) {
+      await notifyOperatorSignRequest(updated.id);
+    }
   }
+
+  revalidatePath("/work-orders");
+  revalidatePath("/notifications");
 
   revalidatePath(`/jobs/${job.id}`);
   revalidatePath("/");
