@@ -27,6 +27,19 @@ export async function nextRequestNumber(): Promise<string> {
   return `${prefix}${String(n).padStart(4, "0")}`;
 }
 
+/** Generates the next handoff number, e.g. HO-2026-0007. */
+export async function nextHandoffNumber(): Promise<string> {
+  const year = new Date().getUTCFullYear();
+  const prefix = `HO-${year}-`;
+  const last = await prisma.handoff.findFirst({
+    where: { handoffNumber: { startsWith: prefix } },
+    orderBy: { handoffNumber: "desc" },
+    select: { handoffNumber: true },
+  });
+  const n = last ? parseInt(last.handoffNumber.slice(prefix.length), 10) + 1 : 1;
+  return `${prefix}${String(n).padStart(4, "0")}`;
+}
+
 export function newToken(): string {
   return crypto.randomBytes(24).toString("base64url");
 }

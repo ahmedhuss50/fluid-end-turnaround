@@ -2,7 +2,7 @@
 
 import { prisma } from "@/lib/db";
 import { JOB_STATUS, PARTY, TEST_RESULT, REQUEST_STATUS, STAGE_ORDER } from "@/lib/constants";
-import { nextJobNumber, nextRequestNumber, newToken, appBaseUrl, fullJobInclude } from "@/lib/jobs";
+import { nextJobNumber, nextRequestNumber, nextHandoffNumber, newToken, appBaseUrl, fullJobInclude } from "@/lib/jobs";
 import { getEsignProvider } from "@/lib/esign";
 import { getStorage } from "@/lib/storage";
 import { generateCertificate } from "@/lib/certificate";
@@ -194,6 +194,44 @@ export async function submitRepairRequest(formData: FormData) {
 
   revalidatePath("/requests");
   redirect("/requests?submitted=1");
+}
+
+/** Create a chain-of-custody handoff with the client's RELEASE signature. */
+export async function createRelease(formData: FormData) {
+  const serialNumber = str(formData, "serialNumber");
+  const customer = str(formData, "customer");
+  const releasedByName = str(formData, "releasedByName");
+  if (!serialNumber || !customer || !releasedByName) {
+    throw new Error("Serial number, customer, and release signature are required.");
+  }
+  const handoffNumber = await nextHandoffNumber();
+  await prisma.handoff.create({
+    data: {
+      handoffNumber,
+      serialNumber,
+      manufacturer: str(formData, "manufacturer") || null,
+      customer,
+      deliveryMethod: str(formData, "deliveryMethod") || null,
+      conditionNotes: str(formData, "conditionNotes") || null,
+      releasedByName,
+      releasedByTitle: str(formData, "releasedByTitle") || null,
+      status: "RELEASED",
+    },
+  });
+  revalidatePath("/handoffs");
+  redirect("/handoffs?released=1");
+}
+
+/** PSI signs to RECEIVE a released handoff. */
+export async function receiveHandoff(handoffId: string, formData: FormData) {
+  const receivedByName = str(formData, "receivedByName");
+  if (!receivedByName) throw new Error("Enter your name to sign for receipt.");
+  await prisma.handoff.update({
+    where: { id: handoffId },
+    data: { receivedByName, receivedAt: new Date(), status: "RECEIVED" },
+  });
+  revalidatePath("/handoffs");
+  redirect(`/handoffs/${handoffId}`);
 }
 
 /** Route a DRAFT job for signatures (PSI first). */

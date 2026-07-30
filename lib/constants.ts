@@ -61,6 +61,12 @@ export const OUTCOME_LABEL: Record<string, string> = {
   SCRAP: "Scrap — cannot repair",
 };
 
+export const HANDOFF_STATUS = { RELEASED: "RELEASED", RECEIVED: "RECEIVED" } as const;
+export const HANDOFF_LABEL: Record<string, string> = {
+  RELEASED: "Released — awaiting PSI receipt",
+  RECEIVED: "Received by PSI",
+};
+
 // Work-order pipeline stages (the kanban columns after "receiving").
 export const STAGE_ORDER = ["INSPECTION", "WORK", "TEST", "SIGNOFF"];
 export const STAGE_LABEL: Record<string, string> = {

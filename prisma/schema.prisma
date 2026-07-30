@@ -89,6 +89,27 @@ model RepairRequest {
   createdAt         DateTime @default(now())
 }
 
+/// A chain-of-custody handoff of a fluid end: the client signs to RELEASE it,
+/// then PSI signs to RECEIVE it. Independent of the work order.
+model Handoff {
+  id             String    @id @default(cuid())
+  handoffNumber  String    @unique // e.g. HO-2026-0001
+  serialNumber   String
+  manufacturer   String?
+  customer       String
+  deliveryMethod String? // PICKUP | DELIVERY
+  conditionNotes String?
+  // Release (client)
+  releasedByName  String
+  releasedByTitle String?
+  releasedAt      DateTime @default(now())
+  // Receive (PSI)
+  receivedByName String?
+  receivedAt     DateTime?
+  status         String    @default("RELEASED") // RELEASED | RECEIVED
+  createdAt      DateTime  @default(now())
+}
+
 /// One signature request/record. A completed job has two: PSI then Pro Petro.
 model Signature {
   id          String        @id @default(cuid())
