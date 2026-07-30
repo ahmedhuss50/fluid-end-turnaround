@@ -1,0 +1,2 @@
+-- AlterTable
+ALTER TABLE "TurnaroundJob" ADD COLUMN     "stage" TEXT NOT NULL DEFAULT 'INSPECTION';

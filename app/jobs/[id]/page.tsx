@@ -73,6 +73,13 @@ export default async function JobDetail({ params }: { params: { id: string } }) 
             {job.inspectionNotes && (<><dt>Inspection</dt><dd>{job.inspectionNotes}</dd></>)}
             {job.notes && (<><dt>Work notes</dt><dd>{job.notes}</dd></>)}
           </dl>
+          {job.nameplatePhotoKey && (
+            <div style={{ marginTop: 16 }}>
+              <div className="small muted" style={{ fontWeight: 600, textTransform: "uppercase", letterSpacing: ".03em", marginBottom: 8 }}>Nameplate photo</div>
+              {/* eslint-disable-next-line @next/next/no-img-element */}
+              <img src={`/nameplate/job/${job.id}`} alt="Nameplate" style={{ maxHeight: 220, borderRadius: 10, border: "1px solid var(--line)" }} />
+            </div>
+          )}
         </div>
       </div>
 

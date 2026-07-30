@@ -1,13 +1,40 @@
 "use server";
 
 import { prisma } from "@/lib/db";
-import { JOB_STATUS, PARTY, TEST_RESULT, REQUEST_STATUS } from "@/lib/constants";
+import { JOB_STATUS, PARTY, TEST_RESULT, REQUEST_STATUS, STAGE_ORDER } from "@/lib/constants";
 import { nextJobNumber, nextRequestNumber, newToken, appBaseUrl, fullJobInclude } from "@/lib/jobs";
 import { getEsignProvider } from "@/lib/esign";
+import { getStorage } from "@/lib/storage";
 import { generateCertificate } from "@/lib/certificate";
+
+/** Upload a captured nameplate photo (if present) and return its storage key. */
+async function saveNameplate(formData: FormData, scope: "job" | "req", id: string): Promise<string | null> {
+  const photo = formData.get("nameplatePhoto");
+  if (!photo || typeof photo === "string" || photo.size === 0) return null;
+  const key = `nameplates/${scope}-${id}.jpg`;
+  try {
+    const buf = new Uint8Array(await photo.arrayBuffer());
+    await getStorage().putObject(key, buf, photo.type || "image/jpeg");
+    return key;
+  } catch {
+    return null;
+  }
+}
 import { revalidatePath } from "next/cache";
 import { redirect } from "next/navigation";
 import { cookies } from "next/headers";
+
+/** Advance a work order to the next pipeline stage (kanban Move). */
+export async function advanceStage(jobId: string) {
+  const job = await prisma.turnaroundJob.findUnique({ where: { id: jobId }, select: { stage: true } });
+  if (!job) return;
+  const i = STAGE_ORDER.indexOf(job.stage);
+  const next = STAGE_ORDER[Math.min(i + 1, STAGE_ORDER.length - 1)];
+  if (next !== job.stage) {
+    await prisma.turnaroundJob.update({ where: { id: jobId }, data: { stage: next } });
+    revalidatePath("/board");
+  }
+}
 
 /** Switch the current view between PSI and client (Pro Petro). */
 export async function setRole(role: string) {
@@ -110,6 +137,10 @@ export async function createTurnaround(formData: FormData) {
     },
   });
 
+  // Captured nameplate photo (optional).
+  const npKey = await saveNameplate(formData, "job", job.id);
+  if (npKey) await prisma.turnaroundJob.update({ where: { id: job.id }, data: { nameplatePhotoKey: npKey } });
+
   // If this work order was started from a client repair request, link them.
   const requestId = str(formData, "requestId");
   if (requestId) {
@@ -140,7 +171,7 @@ export async function submitRepairRequest(formData: FormData) {
   }
 
   const requestNumber = await nextRequestNumber();
-  await prisma.repairRequest.create({
+  const created = await prisma.repairRequest.create({
     data: {
       requestNumber,
       company,
@@ -157,6 +188,9 @@ export async function submitRepairRequest(formData: FormData) {
       deliveryMethod: str(formData, "deliveryMethod") || null,
     },
   });
+
+  const npKey = await saveNameplate(formData, "req", created.id);
+  if (npKey) await prisma.repairRequest.update({ where: { id: created.id }, data: { nameplatePhotoKey: npKey } });
 
   revalidatePath("/requests");
   redirect("/requests?submitted=1");

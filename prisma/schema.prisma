@@ -31,6 +31,7 @@ model TurnaroundJob {
   fluidEnd      FluidEnd      @relation(fields: [fluidEndId], references: [id])
   fluidEndId    String
   status        String        @default("DRAFT") // DRAFT | AWAITING_PSI | AWAITING_OPERATOR | COMPLETED
+  stage         String        @default("INSPECTION") // pipeline stage: INSPECTION | WORK | TEST | SIGNOFF
   technician    String // PSI tech who performed the work
   intakeDate    DateTime      @default(now())
   completedDate DateTime?
@@ -38,6 +39,7 @@ model TurnaroundJob {
   notes         String?
   inspectionNotes String?     // findings from the inspection stage
   outcome         String?     // READY_PICKUP | READY_DELIVERY | SCRAP
+  nameplatePhotoKey String?   // storage key for the captured nameplate photo
   certificateUrl String?      // path to signed PDF once completed
   // Receiving / chain of custody (captured when PSI takes possession)
   deliveryMethod   String? // PICKUP (PSI collects) | DELIVERY (client drops off)
@@ -81,6 +83,7 @@ model RepairRequest {
   clientSignerTitle String?
   clientSignedAt    DateTime @default(now())
   deliveryMethod    String? // PICKUP (PSI collects) | DELIVERY (client drops off)
+  nameplatePhotoKey String? // storage key for the captured nameplate photo
   status            String   @default("SUBMITTED") // SUBMITTED | CONVERTED
   jobId             String? // linked work order once converted
   createdAt         DateTime @default(now())

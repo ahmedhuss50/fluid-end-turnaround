@@ -207,6 +207,8 @@ table.grid tbody tr:hover td { background: #faf8f3; }
 
 /* ---------- Kanban board ---------- */
 .board { display: grid; grid-template-columns: repeat(3, 1fr); gap: 18px; align-items: start; }
+.board-5 { display: flex; gap: 14px; overflow-x: auto; align-items: start; padding-bottom: 6px; }
+.board-5 .board-col { flex: 1 0 230px; min-width: 230px; }
 .board-col { background: #f1ede4; border: 1px solid var(--line); border-radius: var(--radius); padding: 12px; }
 .board-col-head { display: flex; align-items: center; justify-content: space-between; padding: 4px 8px 12px; }
 .board-col-head .t { font-size: 12.5px; font-weight: 700; text-transform: uppercase; letter-spacing: .05em; color: var(--ink-2); display: flex; align-items: center; gap: 8px; }

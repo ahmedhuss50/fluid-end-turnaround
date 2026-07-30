@@ -41,4 +41,19 @@ export class SupabaseStorage implements CertStorage {
     if (error || !data) return null;
     return { kind: "redirect", url: data.signedUrl };
   }
+
+  async putObject(key: string, bytes: Uint8Array, contentType: string): Promise<void> {
+    const { error } = await this.client.storage
+      .from(this.bucket)
+      .upload(key, bytes, { contentType, upsert: true });
+    if (error) throw new Error(`Supabase upload failed: ${error.message}`);
+  }
+
+  async getObject(key: string): Promise<CertResult> {
+    const { data, error } = await this.client.storage
+      .from(this.bucket)
+      .createSignedUrl(key, 120);
+    if (error || !data) return null;
+    return { kind: "redirect", url: data.signedUrl };
+  }
 }

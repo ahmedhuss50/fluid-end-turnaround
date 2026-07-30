@@ -24,4 +24,24 @@ export class LocalStorage implements CertStorage {
       return null;
     }
   }
+
+  private safe(key: string) {
+    // prevent path traversal; keep subdirs
+    return key.split("/").map((s) => path.basename(s)).join("/");
+  }
+
+  async putObject(key: string, bytes: Uint8Array): Promise<void> {
+    const f = path.join(process.cwd(), "storage", this.safe(key));
+    await fs.mkdir(path.dirname(f), { recursive: true });
+    await fs.writeFile(f, bytes);
+  }
+
+  async getObject(key: string): Promise<CertResult> {
+    try {
+      const buf = await fs.readFile(path.join(process.cwd(), "storage", this.safe(key)));
+      return { kind: "buffer", data: new Uint8Array(buf) };
+    } catch {
+      return null;
+    }
+  }
 }

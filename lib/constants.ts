@@ -61,6 +61,15 @@ export const OUTCOME_LABEL: Record<string, string> = {
   SCRAP: "Scrap — cannot repair",
 };
 
+// Work-order pipeline stages (the kanban columns after "receiving").
+export const STAGE_ORDER = ["INSPECTION", "WORK", "TEST", "SIGNOFF"];
+export const STAGE_LABEL: Record<string, string> = {
+  INSPECTION: "Inspection",
+  WORK: "Work performed",
+  TEST: "Pressure test",
+  SIGNOFF: "Sign-off & outcome",
+};
+
 // Wear parts commonly replaced during a fluid-end turnaround.
 export const WEAR_PARTS: { key: string; label: string }[] = [
   { key: "valves", label: "Valves" },

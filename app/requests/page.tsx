@@ -4,6 +4,7 @@ import { submitRepairRequest } from "@/app/actions";
 import { REQUEST_STATUS, CUSTOMERS, DELIVERY_METHOD } from "@/lib/constants";
 import { getRole } from "@/lib/role";
 import { fmtDate } from "@/components/ui";
+import NameplateCapture from "@/components/NameplateCapture";
 
 export const dynamic = "force-dynamic";
 
@@ -59,6 +60,7 @@ export default async function RepairRequests({
             </div>
 
             <div className="section-label" style={{ marginTop: 8 }}>Fluid end &amp; issue</div>
+            <NameplateCapture />
             <div className="grid-2">
               <div className="field">
                 <label>Serial number <span className="req">*</span></label>

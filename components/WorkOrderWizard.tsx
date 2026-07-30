@@ -5,6 +5,7 @@ import Link from "next/link";
 import { createTurnaround } from "@/app/actions";
 import { WEAR_PARTS, CUSTOMERS, DELIVERY_METHOD, OUTCOME } from "@/lib/constants";
 import PressureTestField from "@/components/PressureTestField";
+import NameplateCapture from "@/components/NameplateCapture";
 
 type Prefill = {
   serial?: string; manufacturer?: string; customer?: string; model?: string;
@@ -89,6 +90,7 @@ export default function WorkOrderWizard({ prefill }: { prefill?: Prefill }) {
                 </div>
               )}
               <div className="section-label">Unit identity</div>
+              <NameplateCapture />
               <div className="grid-2">
                 <div className="field">
                   <label>Serial number <span className="req">*</span></label>
