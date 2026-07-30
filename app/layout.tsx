@@ -16,20 +16,6 @@ export const metadata: Metadata = {
   description: "Digital turnaround documentation with dual e-signature.",
 };
 
-// PSI pump-jack placeholder mark. Swap for the real PSI logo (see note in README).
-function PumpJack() {
-  return (
-    <svg viewBox="0 0 48 40" fill="none" stroke="currentColor" strokeWidth="2.1" strokeLinecap="round" strokeLinejoin="round">
-      <line x1="5" y1="35" x2="43" y2="35" />
-      <path d="M17 35 L23 15 L29 35" />
-      <line x1="10" y1="13" x2="38" y2="21" />
-      <circle cx="38" cy="22" r="4.2" fill="currentColor" stroke="none" />
-      <path d="M10 13 L8 21" />
-      <line x1="23" y1="15" x2="23" y2="35" />
-    </svg>
-  );
-}
-
 export default async function RootLayout({ children }: { children: React.ReactNode }) {
   const role = getRole();
   let units = 0;
@@ -56,7 +42,6 @@ export default async function RootLayout({ children }: { children: React.ReactNo
         <div className="thintop" />
         <header className="topbar">
           <Link href="/" className="brand">
-            <span className="logo"><PumpJack /></span>
             <span className="word">PSI Portal</span>
           </Link>
           <span className="crumb-sep">/</span>
