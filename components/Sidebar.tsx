@@ -22,10 +22,12 @@ export default function Sidebar({ units, active, requests, role }: { units: numb
     requests: <><path d="M9 4h6a1 1 0 0 1 1 1v1h2a1 1 0 0 1 1 1v13a1 1 0 0 1-1 1H6a1 1 0 0 1-1-1V7a1 1 0 0 1 1-1h2V5a1 1 0 0 1 1-1Z" /><path d="M9 6h6" /><path d="M9 12h6M9 16h4" /></>,
     plus: <><path d="M12 5v14" /><path d="M5 12h14" /></>,
     gauge: <><path d="M12 3a9 9 0 0 1 9 9" /><path d="M3 12a9 9 0 0 1 9-9" /><path d="M3 12a9 9 0 0 0 9 9 9 9 0 0 0 9-9" /><path d="M12 12l4-3" /><circle cx="12" cy="12" r="1.4" /></>,
+    board: <><rect x="3" y="3" width="6" height="18" rx="1" /><rect x="10" y="3" width="6" height="12" rx="1" /><rect x="17" y="3" width="4" height="16" rx="1" /></>,
   };
 
   const psiItems = [
     { href: "/", label: "Dashboard", count: active, icon: ICON.dashboard },
+    { href: "/board", label: "Pipeline Board", count: null, icon: ICON.board },
     { href: "/units", label: "Fluid Ends", count: units, icon: ICON.units },
     { href: "/requests", label: "Repair Requests", count: requests, icon: ICON.requests },
     { href: "/jobs/new", label: "New Work Order", count: null, icon: ICON.plus },
