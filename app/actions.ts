@@ -49,10 +49,14 @@ export async function markNotificationsRead(recipient: string) {
   revalidatePath("/", "layout");
 }
 
-/** Switch the current view between PSI and client (Pro Petro). */
+/** Switch the current view between PSI and client (Pro Petro). Sets the cookie
+ *  authoritatively; the client then does a full-document navigation to the
+ *  role's landing page, which re-renders the layout/sidebar from the server and
+ *  bypasses the client Router Cache (the source of the "sidebar didn't change"
+ *  bug). */
 export async function setRole(role: string) {
-  cookies().set("role", role === "client" ? "client" : "psi", { path: "/", maxAge: 60 * 60 * 24 * 30 });
-  revalidatePath("/", "layout");
+  const r = role === "client" ? "client" : "psi";
+  cookies().set("role", r, { path: "/", maxAge: 60 * 60 * 24 * 30 });
 }
 
 function str(fd: FormData, key: string): string {
