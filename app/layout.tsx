@@ -72,7 +72,7 @@ export default async function RootLayout({ children }: { children: React.ReactNo
           <span className="crumb-app">Fluid End work orders</span>
           <span className="top-spacer" />
           {role === "client" && <NotifBell count={unread} />}
-          <span className="top-user">{session.name}{session.role === "psi" ? " · PSI" : session.company ? ` · ${session.company}` : ""}</span>
+          <Link href="/account" className="top-user" title="Account settings">{session.name}{session.role === "psi" ? " · PSI" : session.company ? ` · ${session.company}` : ""}</Link>
           <RoleSwitch role={role} />
           <span className="lang"><span className="on">EN</span><span>ES</span></span>
           <form action={logout}><button type="submit" className="logout-btn" title="Log out">Log out</button></form>

@@ -274,3 +274,5 @@ table.grid tbody tr:hover td { background: #faf8f3; }
 .authhint-row span { width: 68px; color: var(--muted); flex: none; }
 .authhint-row code { background: #f4f1ea; border: 1px solid var(--line); border-radius: 6px; padding: 2px 7px; font-size: 12px; }
 .authfoot { color: #a7a290; font-size: 12px; }
+
+a.top-user:hover { color: var(--red); }

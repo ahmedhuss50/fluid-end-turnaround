@@ -33,12 +33,6 @@ export default function LoginPage({ searchParams }: { searchParams: { error?: st
           </div>
           <button type="submit" className="btn" style={{ width: "100%", justifyContent: "center" }}>Sign in →</button>
         </form>
-
-        <div className="authhint">
-          <div className="authhint-h">Demo accounts</div>
-          <div className="authhint-row"><span>PSI staff</span><code>jacob@psi.com</code><code>psi12345</code></div>
-          <div className="authhint-row"><span>Pro Petro</span><code>sam@propetro.com</code><code>propetro12345</code></div>
-        </div>
       </div>
       <div className="authfoot">PSI Fluid End Work Order System</div>
     </div>

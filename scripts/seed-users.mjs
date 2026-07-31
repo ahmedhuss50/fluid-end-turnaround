@@ -11,18 +11,29 @@ function hashPassword(password) {
   return `${salt}:${hash}`;
 }
 
+// All PSI staff. Shared starting password — users can change it in the app.
+const DEFAULT_PASSWORD = "Welcome@123";
 const USERS = [
-  { email: "jacob@psi.com", name: "Jacob Ramirez", role: "psi", company: null, password: "psi12345" },
-  { email: "sam@propetro.com", name: "Sam Operator", role: "client", company: "Pro Petro", password: "propetro12345" },
+  { email: "josh@innuvis.com", name: "Josh", role: "psi", company: null },
+  { email: "support@elevatemybusiness.co", name: "Ahmed", role: "psi", company: null },
+  { email: "mike@psiofc.com", name: "Mike", role: "psi", company: null },
+  { email: "almodovajacob.23@gmail.com", name: "Jacob", role: "psi", company: null },
 ];
+
+// "Those are the only users I want" — remove any accounts not in the list above.
+const keep = USERS.map((u) => u.email);
+const removed = await prisma.user.deleteMany({ where: { email: { notIn: keep } } });
+if (removed.count) console.log(`Removed ${removed.count} account(s) not in the list.`);
 
 for (const u of USERS) {
   await prisma.user.upsert({
     where: { email: u.email },
-    update: { name: u.name, role: u.role, company: u.company, passwordHash: hashPassword(u.password) },
-    create: { email: u.email, name: u.name, role: u.role, company: u.company, passwordHash: hashPassword(u.password) },
+    // Only set the password on create, so re-running the seed doesn't reset a
+    // password a user has already changed.
+    update: { name: u.name, role: u.role, company: u.company },
+    create: { email: u.email, name: u.name, role: u.role, company: u.company, passwordHash: hashPassword(DEFAULT_PASSWORD) },
   });
-  console.log(`Seeded ${u.role} account: ${u.email} / ${u.password}`);
+  console.log(`Seeded ${u.role} account: ${u.email}`);
 }
 
 await prisma.$disconnect();
