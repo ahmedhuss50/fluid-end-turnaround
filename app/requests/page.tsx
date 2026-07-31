@@ -14,7 +14,10 @@ export default async function RepairRequests({
   searchParams: { submitted?: string };
 }) {
   const isClient = getRole() === "client";
-  const requests = await prisma.repairRequest.findMany({ orderBy: { createdAt: "desc" }, take: 50 });
+  const [requests, batches] = await Promise.all([
+    prisma.repairRequest.findMany({ orderBy: { createdAt: "desc" }, take: 50 }),
+    prisma.requestBatch.findMany({ orderBy: { createdAt: "desc" }, take: 25, include: { _count: { select: { items: true } } } }),
+  ]);
 
   return (
     <>
@@ -23,7 +26,48 @@ export default async function RepairRequests({
           <h1>Repair requests</h1>
           <p>Client-submitted fluid ends awaiting repair. Each request is authorized by the client&apos;s signature, then turned into a work order.</p>
         </div>
+        <Link href="/requests/batch" className="btn secondary">+ Batch request (multiple units)</Link>
       </div>
+
+      {batches.length > 0 && (
+        <div className="card" style={{ marginBottom: 22 }}>
+          <div className="card-head"><h2>Batch requests</h2></div>
+          <table className="grid">
+            <thead>
+              <tr>
+                <th>Batch</th>
+                <th>Company</th>
+                <th>Units</th>
+                <th>Authorized by</th>
+                <th>Submitted</th>
+                <th>Status</th>
+                <th></th>
+              </tr>
+            </thead>
+            <tbody>
+              {batches.map((b) => (
+                <tr key={b.id}>
+                  <td><Link href={`/batches/${b.id}`} className="mono">{b.batchNumber}</Link></td>
+                  <td>{b.company}</td>
+                  <td><span className="badge awaiting"><span className="d" />{b._count.items} units</span></td>
+                  <td>{b.clientSignerName}</td>
+                  <td className="small muted">{fmtDate(b.createdAt)}</td>
+                  <td>
+                    {b.status === "CONVERTED"
+                      ? <span className="badge completed">Work order created</span>
+                      : <span className="badge awaiting">Awaiting work order</span>}
+                  </td>
+                  <td className="right">
+                    <Link href={`/batches/${b.id}`} className="small">
+                      {isClient ? "Track →" : b.status === "CONVERTED" ? "View →" : "Start combined WO →"}
+                    </Link>
+                  </td>
+                </tr>
+              ))}
+            </tbody>
+          </table>
+        </div>
+      )}
 
       {searchParams.submitted === "1" && (
         <div className="callout green" style={{ marginBottom: 18 }}>

@@ -37,6 +37,7 @@ export default async function JobDetail({ params }: { params: { id: string } }) 
           <h1 className="mono" style={{ fontSize: 22 }}>{job.jobNumber}</h1>
           <div className="flex" style={{ marginTop: 8 }}>
             <StatusBadge status={job.status} />
+            {job.isBatch && <span className="badge awaiting"><span className="d" />Batch · {job.extraUnits.length + 1} units</span>}
             {job.pressureTest && <ResultBadge result={job.pressureTest.result} />}
             {job.outcome && (
               <span className={`badge ${job.outcome === "SCRAP" ? "fail" : "completed"}`}>
@@ -89,6 +90,33 @@ export default async function JobDetail({ params }: { params: { id: string } }) 
           )}
         </div>
       </div>
+
+      {job.isBatch && (
+        <div className="card">
+          <div className="card-head"><h2>Fluid ends in this batch ({job.extraUnits.length + 1})</h2></div>
+          <table className="grid">
+            <thead>
+              <tr><th>#</th><th>Serial #</th><th>Manufacturer</th><th>Model</th></tr>
+            </thead>
+            <tbody>
+              <tr>
+                <td className="small muted">1</td>
+                <td><Link href={`/units/${encodeURIComponent(job.fluidEnd.serialNumber)}`} className="mono">{job.fluidEnd.serialNumber}</Link></td>
+                <td>{job.fluidEnd.manufacturer}</td>
+                <td className="small">{job.fluidEnd.model || "—"}</td>
+              </tr>
+              {job.extraUnits.map((u, i) => (
+                <tr key={u.id}>
+                  <td className="small muted">{i + 2}</td>
+                  <td><Link href={`/units/${encodeURIComponent(u.serialNumber)}`} className="mono">{u.serialNumber}</Link></td>
+                  <td>{u.manufacturer}</td>
+                  <td className="small">{u.model || "—"}</td>
+                </tr>
+              ))}
+            </tbody>
+          </table>
+        </div>
+      )}
 
       {(job.deliveryMethod || job.receivedByPsi || job.releasedByClient) && (
         <div className="card">
@@ -174,6 +202,11 @@ export default async function JobDetail({ params }: { params: { id: string } }) 
                         quantity: it.quantity,
                         unitPrice: it.unitPriceCents ? (it.unitPriceCents / 100).toFixed(2) : "",
                       }))
+                    : job.isBatch
+                    ? [
+                        { description: `Service — ${job.fluidEnd.serialNumber}`, quantity: 1, unitPrice: "" },
+                        ...job.extraUnits.map((u) => ({ description: `Service — ${u.serialNumber}`, quantity: 1, unitPrice: "" })),
+                      ]
                     : [
                         { description: "Labor — fluid-end service", quantity: 1, unitPrice: "" },
                         ...parts.map((p) => ({ description: `Replace ${PART_LABEL[p] || p}`, quantity: 1, unitPrice: "" })),

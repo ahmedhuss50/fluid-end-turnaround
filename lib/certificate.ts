@@ -8,6 +8,7 @@ interface CertData {
   manufacturer: string;
   customer: string;
   model?: string | null;
+  units?: { serialNumber: string; manufacturer: string; model?: string | null }[]; // all units on a batch
   technician: string;
   intakeDate: Date;
   completedDate: Date;
@@ -116,6 +117,20 @@ export async function generateCertificate(data: CertData): Promise<string> {
   y -= 28;
   hr(y);
   y -= 22;
+
+  // Units covered (batch / combined work order)
+  if (data.units && data.units.length > 1) {
+    text(`UNITS COVERED (${data.units.length})`, M, y, 8.5, bold, GREY);
+    y -= 16;
+    data.units.forEach((u, i) => {
+      const line = `${i + 1}.  ${u.serialNumber}    ·    ${u.manufacturer}${u.model ? `    ·    ${u.model}` : ""}`;
+      text(line, M, y, 10, font, INK);
+      y -= 14;
+    });
+    y -= 8;
+    hr(y);
+    y -= 22;
+  }
 
   // Replaced parts
   text("REPLACED PARTS", M, y, 8.5, bold, GREY);

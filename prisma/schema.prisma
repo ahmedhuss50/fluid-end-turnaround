@@ -65,6 +65,56 @@ model TurnaroundJob {
   signatures    Signature[]
   notifications Notification[]
   invoice       Invoice?
+  isBatch       Boolean       @default(false) // combined work order covering multiple fluid ends
+  extraUnits    JobUnit[] // units 2..N of a batch (unit 1 is fluidEnd above)
+}
+
+/// An additional fluid end on a batch (combined) work order. The job's primary
+/// unit is its fluidEnd; these are the rest of the units in the same batch.
+model JobUnit {
+  id           String        @id @default(cuid())
+  job          TurnaroundJob @relation(fields: [jobId], references: [id], onDelete: Cascade)
+  jobId        String
+  serialNumber String
+  manufacturer String
+  model        String?
+  problem      String?
+  order        Int           @default(0)
+
+  @@index([jobId])
+}
+
+/// A client batch submission: multiple fluid ends requested for repair together
+/// under one authorization signature. PSI turns it into one combined work order.
+model RequestBatch {
+  id                String             @id @default(cuid())
+  batchNumber       String             @unique // e.g. RB-2026-0001
+  company           String
+  contactName       String
+  contactEmail      String?
+  contactPhone      String?
+  clientSignerName  String
+  clientSignerTitle String?
+  clientSignedAt    DateTime           @default(now())
+  deliveryMethod    String?
+  notes             String?
+  status            String             @default("SUBMITTED") // SUBMITTED | CONVERTED
+  jobId             String? // linked combined work order once converted
+  createdAt         DateTime           @default(now())
+  items             RequestBatchItem[]
+}
+
+model RequestBatchItem {
+  id           String       @id @default(cuid())
+  batch        RequestBatch @relation(fields: [batchId], references: [id], onDelete: Cascade)
+  batchId      String
+  serialNumber String
+  manufacturer String
+  model        String?
+  problem      String?
+  order        Int          @default(0)
+
+  @@index([batchId])
 }
 
 /// A single invoice for a completed work order. PSI enters the line items and

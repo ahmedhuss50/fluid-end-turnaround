@@ -40,6 +40,19 @@ export async function nextInvoiceNumber(): Promise<string> {
   return `${prefix}${String(n).padStart(4, "0")}`;
 }
 
+/** Generates the next batch-request number, e.g. RB-2026-0007. */
+export async function nextBatchNumber(): Promise<string> {
+  const year = new Date().getUTCFullYear();
+  const prefix = `RB-${year}-`;
+  const last = await prisma.requestBatch.findFirst({
+    where: { batchNumber: { startsWith: prefix } },
+    orderBy: { batchNumber: "desc" },
+    select: { batchNumber: true },
+  });
+  const n = last ? parseInt(last.batchNumber.slice(prefix.length), 10) + 1 : 1;
+  return `${prefix}${String(n).padStart(4, "0")}`;
+}
+
 /** Generates the next handoff number, e.g. HO-2026-0007. */
 export async function nextHandoffNumber(): Promise<string> {
   const year = new Date().getUTCFullYear();
@@ -62,6 +75,7 @@ export function fullJobInclude() {
     fluidEnd: true,
     pressureTest: true,
     signatures: { orderBy: { order: "asc" as const } },
+    extraUnits: { orderBy: { order: "asc" as const } },
   };
 }
 

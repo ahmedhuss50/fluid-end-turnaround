@@ -2,7 +2,7 @@
 
 import { prisma } from "@/lib/db";
 import { JOB_STATUS, PARTY, TEST_RESULT, REQUEST_STATUS, STAGE_ORDER, INVOICE_STATUS, PART_LABEL } from "@/lib/constants";
-import { nextJobNumber, nextRequestNumber, nextHandoffNumber, nextInvoiceNumber, newToken, appBaseUrl, fullJobInclude } from "@/lib/jobs";
+import { nextJobNumber, nextRequestNumber, nextHandoffNumber, nextInvoiceNumber, nextBatchNumber, newToken, appBaseUrl, fullJobInclude } from "@/lib/jobs";
 import { getEsignProvider } from "@/lib/esign";
 import { getStorage } from "@/lib/storage";
 import { generateCertificate } from "@/lib/certificate";
@@ -213,6 +213,153 @@ export async function submitRepairRequest(formData: FormData) {
   redirect("/requests?submitted=1");
 }
 
+/** Parse the parallel unit arrays (serial/manufacturer/model/problem) from a form. */
+function parseUnits(formData: FormData) {
+  const serials = formData.getAll("unitSerial").map(String);
+  const manus = formData.getAll("unitManufacturer").map(String);
+  const models = formData.getAll("unitModel").map(String);
+  const problems = formData.getAll("unitProblem").map(String);
+  return serials
+    .map((s, i) => ({
+      serialNumber: s.trim(),
+      manufacturer: (manus[i] || "").trim(),
+      model: (models[i] || "").trim() || null,
+      problem: (problems[i] || "").trim() || null,
+      order: i,
+    }))
+    .filter((u) => u.serialNumber && u.manufacturer);
+}
+
+/** Client submits a batch of fluid ends for repair under one authorization signature. */
+export async function submitBatchRequest(formData: FormData) {
+  const company = str(formData, "company");
+  const contactName = str(formData, "contactName");
+  const clientSignerName = str(formData, "clientSignerName");
+  const units = parseUnits(formData);
+
+  if (!company || !contactName || !clientSignerName) {
+    throw new Error("Company, contact, and authorization signature are required.");
+  }
+  if (units.length < 1) {
+    throw new Error("Add at least one fluid end (serial number and manufacturer).");
+  }
+
+  const batchNumber = await nextBatchNumber();
+  const batch = await prisma.requestBatch.create({
+    data: {
+      batchNumber,
+      company,
+      contactName,
+      contactEmail: str(formData, "contactEmail") || null,
+      contactPhone: str(formData, "contactPhone") || null,
+      clientSignerName,
+      clientSignerTitle: str(formData, "clientSignerTitle") || null,
+      deliveryMethod: str(formData, "deliveryMethod") || null,
+      notes: str(formData, "notes") || null,
+      items: { create: units },
+    },
+  });
+
+  revalidatePath("/requests");
+  redirect(`/batches/${batch.id}?submitted=1`);
+}
+
+/** PSI turns a batch request into one combined work order covering all its units. */
+export async function createBatchWorkOrder(formData: FormData) {
+  const batchId = str(formData, "batchId");
+  const batch = await prisma.requestBatch.findUnique({ where: { id: batchId } });
+  if (!batch) throw new Error("Batch not found.");
+
+  const technician = str(formData, "technician");
+  const units = parseUnits(formData);
+  if (!technician) throw new Error("Enter the PSI technician who performed the work.");
+  if (units.length < 1) throw new Error("A batch work order needs at least one fluid end.");
+
+  const customer = batch.company;
+  const parts = formData.getAll("parts").map(String).filter(Boolean);
+  const notes = str(formData, "notes") || null;
+  const inspectionNotes = str(formData, "inspectionNotes") || null;
+  const outcome = str(formData, "outcome") || null;
+
+  const testPressurePsi = parseInt(str(formData, "testPressurePsi") || "0", 10);
+  const holdTimeMinutes = parseInt(str(formData, "holdTimeMinutes") || "0", 10);
+  const result = str(formData, "result") === TEST_RESULT.FAIL ? TEST_RESULT.FAIL : TEST_RESULT.PASS;
+  const gauge = str(formData, "gauge") || null;
+  const testedBy = str(formData, "testedBy") || technician;
+
+  const psiName = str(formData, "psiName") || technician;
+  const psiEmail = str(formData, "psiEmail") || null;
+  const opName = str(formData, "opName") || batch.clientSignerName;
+  const opEmail = str(formData, "opEmail") || batch.contactEmail || null;
+
+  const deliveryMethod = str(formData, "deliveryMethod") || batch.deliveryMethod || null;
+  const receivedByPsi = str(formData, "receivedByPsi") || null;
+  const releasedByClient = str(formData, "releasedByClient") || batch.clientSignerName || null;
+
+  // Register a FluidEnd for every unit so each is tracked in the units registry.
+  for (const u of units) {
+    await prisma.fluidEnd.upsert({
+      where: { serialNumber: u.serialNumber },
+      update: { manufacturer: u.manufacturer, customer, model: u.model ?? undefined },
+      create: { serialNumber: u.serialNumber, manufacturer: u.manufacturer, customer, model: u.model },
+    });
+  }
+  const primary = units[0];
+  const primaryFe = await prisma.fluidEnd.findUnique({ where: { serialNumber: primary.serialNumber } });
+
+  const jobNumber = await nextJobNumber();
+  const job = await prisma.turnaroundJob.create({
+    data: {
+      jobNumber,
+      isBatch: true,
+      fluidEndId: primaryFe!.id,
+      technician,
+      status: JOB_STATUS.DRAFT,
+      replacedParts: JSON.stringify(parts),
+      notes,
+      inspectionNotes,
+      outcome,
+      deliveryMethod,
+      receivedByPsi,
+      releasedByClient,
+      receivedAt: receivedByPsi ? new Date() : null,
+      extraUnits: {
+        create: units.slice(1).map((u, i) => ({
+          serialNumber: u.serialNumber,
+          manufacturer: u.manufacturer,
+          model: u.model,
+          problem: u.problem,
+          order: i + 1,
+        })),
+      },
+      pressureTest: {
+        create: {
+          testPressurePsi: isNaN(testPressurePsi) ? 0 : testPressurePsi,
+          holdTimeMinutes: isNaN(holdTimeMinutes) ? 0 : holdTimeMinutes,
+          result,
+          gauge,
+          testedBy,
+        },
+      },
+      signatures: {
+        create: [
+          { party: PARTY.PSI, order: 1, signerName: psiName, signerRole: "PSI Technician", signerEmail: psiEmail, token: newToken() },
+          { party: PARTY.PRO_PETRO, order: 2, signerName: opName || "Operator Representative", signerRole: "Operator Representative", signerEmail: opEmail, token: newToken() },
+        ],
+      },
+    },
+  });
+
+  await prisma.requestBatch.update({
+    where: { id: batch.id },
+    data: { status: "CONVERTED", jobId: job.id },
+  });
+
+  revalidatePath("/requests");
+  revalidatePath("/");
+  redirect(`/jobs/${job.id}`);
+}
+
 /** Create a chain-of-custody handoff with the client's RELEASE signature. */
 export async function createRelease(formData: FormData) {
   const serialNumber = str(formData, "serialNumber");
@@ -356,6 +503,12 @@ export async function applySignature(token: string, formData: FormData) {
       manufacturer: updated.fluidEnd.manufacturer,
       customer: updated.fluidEnd.customer,
       model: updated.fluidEnd.model,
+      units: updated.isBatch
+        ? [
+            { serialNumber: updated.fluidEnd.serialNumber, manufacturer: updated.fluidEnd.manufacturer, model: updated.fluidEnd.model },
+            ...updated.extraUnits.map((u) => ({ serialNumber: u.serialNumber, manufacturer: u.manufacturer, model: u.model })),
+          ]
+        : undefined,
       technician: updated.technician,
       intakeDate: updated.intakeDate,
       completedDate,
@@ -532,7 +685,7 @@ export async function saveInvoice(jobId: string, formData: FormData) {
 async function issueInvoiceForJob(jobId: string) {
   const job = await prisma.turnaroundJob.findUnique({
     where: { id: jobId },
-    include: { invoice: true },
+    include: { invoice: true, fluidEnd: true, extraUnits: { orderBy: { order: "asc" } } },
   });
   if (!job) return;
 
@@ -540,11 +693,18 @@ async function issueInvoiceForJob(jobId: string) {
   if (!invoiceId) {
     // No invoice drafted — create one with default line items (at $0) so there is
     // always an invoice to issue. PSI can fill amounts and re-issue afterward.
+    // For a batch, seed one line per unit; otherwise labor + a line per part.
+    const items = job.isBatch
+      ? [
+          { description: `Service — ${job.fluidEnd.serialNumber}`, quantity: 1, unitPriceCents: 0, order: 0 },
+          ...job.extraUnits.map((u, i) => ({ description: `Service — ${u.serialNumber}`, quantity: 1, unitPriceCents: 0, order: i + 1 })),
+        ]
+      : defaultInvoiceItems(job.replacedParts);
     const created = await prisma.invoice.create({
       data: {
         jobId,
         invoiceNumber: await nextInvoiceNumber(),
-        items: { create: defaultInvoiceItems(job.replacedParts) },
+        items: { create: items },
       },
     });
     invoiceId = created.id;
