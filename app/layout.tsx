@@ -5,6 +5,8 @@ import Link from "next/link";
 import { prisma } from "@/lib/db";
 import { JOB_STATUS, PARTY } from "@/lib/constants";
 import { getRole } from "@/lib/role";
+import { getSession } from "@/lib/auth/session";
+import { logout } from "@/app/auth-actions";
 import Sidebar from "@/components/Sidebar";
 import RoleSwitch from "@/components/RoleSwitch";
 import NotifBell from "@/components/NotifBell";
@@ -18,6 +20,21 @@ export const metadata: Metadata = {
 };
 
 export default async function RootLayout({ children }: { children: React.ReactNode }) {
+  const session = getSession();
+
+  // Unauthenticated (login page, and token signing pages) render without the
+  // app chrome — no sidebar, no DB counts.
+  if (!session) {
+    return (
+      <html lang="en" className={`${inter.variable} ${slab.variable}`}>
+        <body>
+          <div className="thintop" />
+          {children}
+        </body>
+      </html>
+    );
+  }
+
   const role = getRole();
   let units = 0;
   let active = 0;
@@ -55,9 +72,10 @@ export default async function RootLayout({ children }: { children: React.ReactNo
           <span className="crumb-app">Fluid End work orders</span>
           <span className="top-spacer" />
           {role === "client" && <NotifBell count={unread} />}
-          <span className="top-user">{role === "client" ? "Client" : "Ahmed · PSI"}</span>
+          <span className="top-user">{session.name}{session.role === "psi" ? " · PSI" : session.company ? ` · ${session.company}` : ""}</span>
           <RoleSwitch role={role} />
           <span className="lang"><span className="on">EN</span><span>ES</span></span>
+          <form action={logout}><button type="submit" className="logout-btn" title="Log out">Log out</button></form>
         </header>
 
         <div className="app">

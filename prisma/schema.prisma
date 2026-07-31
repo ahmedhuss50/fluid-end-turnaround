@@ -12,6 +12,18 @@ datasource db {
   directUrl = env("DIRECT_URL")
 }
 
+/// A login account. Role determines the default portal (PSI staff vs operator).
+/// No email verification — accounts are active on creation (seeded for now).
+model User {
+  id           String   @id @default(cuid())
+  email        String   @unique
+  name         String
+  passwordHash String
+  role         String   @default("client") // psi | client
+  company      String? // operator company for client users, e.g. "Pro Petro"
+  createdAt    DateTime @default(now())
+}
+
 /// A physical fluid end (the unit). Permanent record, keyed by serial number.
 model FluidEnd {
   id           String          @id @default(cuid())

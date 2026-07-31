@@ -257,3 +257,20 @@ table.grid tbody tr:hover td { background: #faf8f3; }
 .linkbtn { background: none; border: none; color: var(--muted); cursor: pointer; font-size: 14px; padding: 4px 6px; border-radius: 6px; }
 .linkbtn:hover { color: var(--red); background: var(--red-bg); }
 .grid td input { font-size: 13.5px; padding: 7px 9px; }
+
+/* Auth / login */
+.logout-btn { background: #fff; border: 1px solid var(--line-2); color: var(--ink-2); font-weight: 600; font-size: 13px; padding: 6px 12px; border-radius: 8px; cursor: pointer; }
+.logout-btn:hover { color: var(--red); border-color: var(--red-bg); }
+.authwrap { min-height: calc(100vh - 4px); display: flex; flex-direction: column; align-items: center; justify-content: center; padding: 32px 18px; gap: 16px; }
+.authcard { width: 100%; max-width: 400px; background: var(--card); border: 1px solid var(--line); border-radius: var(--radius); padding: 30px 28px; box-shadow: 0 12px 40px rgba(20,16,10,.06); }
+.authbrand { display: flex; flex-direction: column; align-items: flex-start; margin-bottom: 20px; padding-bottom: 18px; border-bottom: 1px solid var(--line); }
+.authbrand .word { font-family: var(--font-slab); font-weight: 700; font-size: 22px; color: var(--red); letter-spacing: -.01em; }
+.authbrand .sub { font-size: 12px; font-weight: 600; color: var(--muted); letter-spacing: .04em; text-transform: uppercase; margin-top: 2px; }
+.authtitle { font-size: 21px; margin: 0 0 4px; }
+.authlede { color: var(--muted); font-size: 14px; margin: 0 0 20px; }
+.authhint { margin-top: 22px; padding-top: 16px; border-top: 1px solid var(--line); }
+.authhint-h { font-size: 11px; font-weight: 700; text-transform: uppercase; letter-spacing: .05em; color: var(--muted); margin-bottom: 8px; }
+.authhint-row { display: flex; align-items: center; gap: 8px; font-size: 12.5px; margin-bottom: 5px; }
+.authhint-row span { width: 68px; color: var(--muted); flex: none; }
+.authhint-row code { background: #f4f1ea; border: 1px solid var(--line); border-radius: 6px; padding: 2px 7px; font-size: 12px; }
+.authfoot { color: #a7a290; font-size: 12px; }
