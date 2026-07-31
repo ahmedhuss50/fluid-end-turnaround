@@ -18,6 +18,7 @@ export default function AccountPage({ searchParams }: { searchParams: { error?: 
 
   const error = searchParams.error ? ERRORS[searchParams.error] || "Something went wrong." : null;
   const changed = searchParams.changed === "1";
+  const mustChange = session.mustChange === true;
 
   return (
     <>
@@ -27,6 +28,12 @@ export default function AccountPage({ searchParams }: { searchParams: { error?: 
           <p>Your profile and password.</p>
         </div>
       </div>
+
+      {mustChange && (
+        <div className="callout amber" style={{ marginBottom: 22 }}>
+          <span><strong>Set a new password to continue.</strong> Your account uses a temporary password — please choose your own before using the portal.</span>
+        </div>
+      )}
 
       <div className="card" style={{ marginBottom: 22 }}>
         <div className="card-head"><h2>Profile</h2></div>

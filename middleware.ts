@@ -17,10 +17,10 @@ function b64urlToBytes(s: string): Uint8Array {
   return out;
 }
 
-async function verify(token: string | undefined, secret: string): Promise<boolean> {
-  if (!token) return false;
+async function decode(token: string | undefined, secret: string): Promise<{ mustChange?: boolean } | null> {
+  if (!token) return null;
   const [p, sig] = token.split(".");
-  if (!p || !sig) return false;
+  if (!p || !sig) return null;
   try {
     const key = await crypto.subtle.importKey(
       "raw",
@@ -30,11 +30,12 @@ async function verify(token: string | undefined, secret: string): Promise<boolea
       ["verify"]
     );
     const ok = await crypto.subtle.verify("HMAC", key, b64urlToBytes(sig), new TextEncoder().encode(p));
-    if (!ok) return false;
+    if (!ok) return null;
     const data = JSON.parse(new TextDecoder().decode(b64urlToBytes(p)));
-    return !(data.exp && Date.now() > data.exp);
+    if (data.exp && Date.now() > data.exp) return null;
+    return data;
   } catch {
-    return false;
+    return null;
   }
 }
 
@@ -42,7 +43,8 @@ export async function middleware(req: NextRequest) {
   const { pathname } = req.nextUrl;
   const isPublic = PUBLIC_PREFIXES.some((p) => pathname === p || pathname.startsWith(p + "/"));
   const secret = process.env.AUTH_SECRET || "dev-insecure-secret-change-me";
-  const authed = await verify(req.cookies.get(SESSION_COOKIE)?.value, secret);
+  const session = await decode(req.cookies.get(SESSION_COOKIE)?.value, secret);
+  const authed = !!session;
 
   if (!authed && !isPublic) {
     const url = req.nextUrl.clone();
@@ -54,6 +56,13 @@ export async function middleware(req: NextRequest) {
   if (authed && pathname === "/login") {
     const url = req.nextUrl.clone();
     url.pathname = "/";
+    return NextResponse.redirect(url);
+  }
+  // First-login users must set a new password — keep them on /account.
+  if (authed && session!.mustChange && !isPublic && pathname !== "/account") {
+    const url = req.nextUrl.clone();
+    url.pathname = "/account";
+    url.search = "";
     return NextResponse.redirect(url);
   }
   return NextResponse.next();

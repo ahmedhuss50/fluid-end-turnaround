@@ -21,6 +21,7 @@ model User {
   passwordHash String
   role         String   @default("client") // psi | client
   company      String? // operator company for client users, e.g. "Pro Petro"
+  mustChangePassword Boolean @default(true) // force a password change on first login
   createdAt    DateTime @default(now())
 }
 

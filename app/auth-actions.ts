@@ -18,9 +18,19 @@ export async function login(formData: FormData) {
   }
 
   const role = user.role === "psi" ? "psi" : "client";
-  setSessionCookie({ uid: user.id, role, name: user.name, email: user.email, company: user.company });
+  setSessionCookie({
+    uid: user.id,
+    role,
+    name: user.name,
+    email: user.email,
+    company: user.company,
+    mustChange: user.mustChangePassword,
+  });
   // Mirror the account role into the view cookie (the demo toggle also uses this).
   cookies().set("role", role, { path: "/", maxAge: 60 * 60 * 24 * 30 });
+  // First-login users are sent to the account page to set a new password;
+  // middleware keeps them there until they do.
+  if (user.mustChangePassword) redirect("/account");
   redirect(role === "client" ? "/requests" : "/");
 }
 
@@ -41,7 +51,19 @@ export async function changePassword(formData: FormData) {
   if (!user || !verifyPassword(current, user.passwordHash)) redirect("/account?error=current");
   if (verifyPassword(next, user.passwordHash)) redirect("/account?error=same");
 
-  await prisma.user.update({ where: { id: user.id }, data: { passwordHash: hashPassword(next) } });
+  await prisma.user.update({
+    where: { id: user.id },
+    data: { passwordHash: hashPassword(next), mustChangePassword: false },
+  });
+  // Re-issue the session so the "must change" flag clears and the app unlocks.
+  setSessionCookie({
+    uid: session.uid,
+    role: session.role,
+    name: session.name,
+    email: session.email,
+    company: session.company,
+    mustChange: false,
+  });
   redirect("/account?changed=1");
 }
 

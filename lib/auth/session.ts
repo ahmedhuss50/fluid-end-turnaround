@@ -10,6 +10,7 @@ export interface Session {
   name: string;
   email: string;
   company?: string | null;
+  mustChange?: boolean; // must set a new password before using the app
   exp: number; // epoch ms
 }
 
