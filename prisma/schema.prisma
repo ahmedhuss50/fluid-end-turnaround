@@ -22,7 +22,21 @@ model User {
   role         String   @default("client") // psi | client
   company      String? // operator company for client users, e.g. "Pro Petro"
   mustChangePassword Boolean @default(true) // force a password change on first login
+  lastLoginAt  DateTime? // most recent successful sign-in
   createdAt    DateTime @default(now())
+  logins       LoginEvent[]
+}
+
+/// One successful sign-in, for access auditing (who logged in, and when).
+model LoginEvent {
+  id     String   @id @default(cuid())
+  user   User     @relation(fields: [userId], references: [id], onDelete: Cascade)
+  userId String
+  email  String // denormalized for easy display
+  at     DateTime @default(now())
+
+  @@index([at])
+  @@index([userId])
 }
 
 /// A physical fluid end (the unit). Permanent record, keyed by serial number.

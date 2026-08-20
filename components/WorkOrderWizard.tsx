@@ -12,7 +12,9 @@ type Prefill = {
   opName?: string; notes?: string; requestId?: string; deliveryMethod?: string;
 };
 
-const STEPS = ["Unit & receiving", "Inspection", "Work performed", "Pressure test", "Sign-off & outcome"];
+const STEPS = ["Units & receiving", "Inspection", "Work performed", "Pressure test", "Sign-off & outcome"];
+
+type Extra = { serialNumber: string; manufacturer: string; model: string };
 
 export default function WorkOrderWizard({ prefill }: { prefill?: Prefill }) {
   const sp = prefill || {};
@@ -21,6 +23,13 @@ export default function WorkOrderWizard({ prefill }: { prefill?: Prefill }) {
   const [err, setErr] = useState("");
   const formRef = useRef<HTMLFormElement>(null);
   const last = STEPS.length - 1;
+
+  // Optional additional fluid ends → makes this one combined work order.
+  const [extras, setExtras] = useState<Extra[]>([]);
+  const addExtra = () => setExtras((p) => [...p, { serialNumber: "", manufacturer: "", model: "" }]);
+  const setExtra = (i: number, patch: Partial<Extra>) => setExtras((p) => p.map((u, idx) => (idx === i ? { ...u, ...patch } : u)));
+  const removeExtra = (i: number) => setExtras((p) => p.filter((_, idx) => idx !== i));
+  const unitCount = 1 + extras.length;
 
   const val = (name: string) => {
     const el = formRef.current?.elements.namedItem(name) as HTMLInputElement | null;
@@ -47,7 +56,7 @@ export default function WorkOrderWizard({ prefill }: { prefill?: Prefill }) {
       <div className="page-head">
         <div>
           <h1>New work order</h1>
-          <p>Step {step + 1} of {STEPS.length} — {STEPS[step]}</p>
+          <p>Step {step + 1} of {STEPS.length} — {STEPS[step]}{unitCount > 1 ? ` · ${unitCount} units` : ""}</p>
         </div>
         <Link href="/" className="btn secondary">Cancel</Link>
       </div>
@@ -114,7 +123,38 @@ export default function WorkOrderWizard({ prefill }: { prefill?: Prefill }) {
                 </div>
               </div>
 
-              <div className="section-label" style={{ marginTop: 10 }}>Receiving — chain of custody</div>
+              <div className="section-label" style={{ marginTop: 10 }}>
+                Additional fluid ends
+                {extras.length > 0 && <span className="badge awaiting" style={{ marginLeft: 6 }}>{unitCount} units total</span>}
+              </div>
+              <p className="hint" style={{ marginTop: -6, marginBottom: 12 }}>
+                Add more units to handle them on one combined work order — a single sign-off, one certificate, and one combined invoice covering all of them.
+              </p>
+              {extras.map((u, i) => (
+                <div key={i} style={{ border: "1px solid var(--line)", borderRadius: 10, padding: 14, marginBottom: 12, background: "#fbfaf7" }}>
+                  <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", marginBottom: 10 }}>
+                    <span className="small" style={{ fontWeight: 700, color: "var(--ink-2)" }}>Unit {i + 2}</span>
+                    <button type="button" className="linkbtn" onClick={() => removeExtra(i)}>✕ Remove</button>
+                  </div>
+                  <div className="grid-2">
+                    <div className="field">
+                      <label>Serial number <span className="req">*</span></label>
+                      <input type="text" name="extraSerial" value={u.serialNumber} onChange={(e) => setExtra(i, { serialNumber: e.target.value })} placeholder="e.g. FE-2200-00842" />
+                    </div>
+                    <div className="field">
+                      <label>Manufacturer <span className="req">*</span></label>
+                      <input type="text" name="extraManufacturer" value={u.manufacturer} onChange={(e) => setExtra(i, { manufacturer: e.target.value })} placeholder="e.g. SPM" />
+                    </div>
+                  </div>
+                  <div className="field">
+                    <label>Model / spec</label>
+                    <input type="text" name="extraModel" value={u.model} onChange={(e) => setExtra(i, { model: e.target.value })} placeholder="Optional" />
+                  </div>
+                </div>
+              ))}
+              <div><button type="button" className="btn secondary small" onClick={addExtra}>+ Add another fluid end</button></div>
+
+              <div className="section-label" style={{ marginTop: 14 }}>Receiving — chain of custody</div>
               <div className="field">
                 <label>How PSI received it</label>
                 <select name="deliveryMethod" defaultValue={sp.deliveryMethod || DELIVERY_METHOD.DELIVERY}>

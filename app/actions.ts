@@ -64,6 +64,20 @@ function str(fd: FormData, key: string): string {
   return typeof v === "string" ? v.trim() : "";
 }
 
+/** Parse the optional "additional fluid ends" rows on the new-work-order form. */
+function parseExtraUnits(formData: FormData) {
+  const serials = formData.getAll("extraSerial").map(String);
+  const manus = formData.getAll("extraManufacturer").map(String);
+  const models = formData.getAll("extraModel").map(String);
+  return serials
+    .map((s, i) => ({
+      serialNumber: s.trim(),
+      manufacturer: (manus[i] || "").trim(),
+      model: (models[i] || "").trim() || null,
+    }))
+    .filter((u) => u.serialNumber && u.manufacturer);
+}
+
 /** Create a new turnaround record (status DRAFT) from the intake form. */
 export async function createTurnaround(formData: FormData) {
   const serialNumber = str(formData, "serialNumber");
@@ -106,12 +120,26 @@ export async function createTurnaround(formData: FormData) {
     create: { serialNumber, manufacturer, customer, model },
   });
 
+  // Optional additional fluid ends — makes this a combined (multi-unit) work order.
+  const extras = parseExtraUnits(formData).filter((u) => u.serialNumber !== serialNumber);
+  for (const u of extras) {
+    await prisma.fluidEnd.upsert({
+      where: { serialNumber: u.serialNumber },
+      update: { manufacturer: u.manufacturer, customer, model: u.model ?? undefined },
+      create: { serialNumber: u.serialNumber, manufacturer: u.manufacturer, customer, model: u.model },
+    });
+  }
+
   const jobNumber = await nextJobNumber();
 
   const job = await prisma.turnaroundJob.create({
     data: {
       jobNumber,
       fluidEndId: fluidEnd.id,
+      isBatch: extras.length > 0,
+      extraUnits: extras.length > 0
+        ? { create: extras.map((u, i) => ({ serialNumber: u.serialNumber, manufacturer: u.manufacturer, model: u.model, order: i + 1 })) }
+        : undefined,
       technician,
       status: JOB_STATUS.DRAFT,
       replacedParts: JSON.stringify(parts),

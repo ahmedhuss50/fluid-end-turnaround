@@ -17,6 +17,10 @@ export async function login(formData: FormData) {
     redirect("/login?error=invalid");
   }
 
+  // Record the sign-in for access auditing.
+  await prisma.user.update({ where: { id: user.id }, data: { lastLoginAt: new Date() } });
+  await prisma.loginEvent.create({ data: { userId: user.id, email: user.email } });
+
   const role = user.role === "psi" ? "psi" : "client";
   setSessionCookie({
     uid: user.id,

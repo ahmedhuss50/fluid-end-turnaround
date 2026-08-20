@@ -26,6 +26,7 @@ export default function Sidebar({ units, active, requests, awaitingSignoff, noti
     handoff: <><path d="M7 8l-4 4 4 4" /><path d="M3 12h11" /><path d="M17 16l4-4-4-4" /><path d="M21 12H10" /></>,
     check: <><path d="M9 11l3 3L22 4" /><path d="M21 12v7a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2V5a2 2 0 0 1 2-2h11" /></>,
     bell: <><path d="M18 8a6 6 0 0 0-12 0c0 7-3 9-3 9h18s-3-2-3-9" /><path d="M13.7 21a2 2 0 0 1-3.4 0" /></>,
+    users: <><path d="M17 21v-2a4 4 0 0 0-4-4H5a4 4 0 0 0-4 4v2" /><circle cx="9" cy="7" r="4" /><path d="M23 21v-2a4 4 0 0 0-3-3.87" /><path d="M16 3.13a4 4 0 0 1 0 7.75" /></>,
   };
 
   const psiItems = [
@@ -35,6 +36,7 @@ export default function Sidebar({ units, active, requests, awaitingSignoff, noti
     { href: "/requests", label: "Repair Requests", count: requests, icon: ICON.requests },
     { href: "/handoffs", label: "Release / Receive", count: null, icon: ICON.handoff },
     { href: "/jobs/new", label: "New Work Order", count: null, icon: ICON.plus },
+    { href: "/users", label: "Users & Access", count: null, icon: ICON.users },
   ];
 
   // Client view: submit + track + sign off + release.
