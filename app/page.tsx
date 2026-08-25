@@ -13,7 +13,7 @@ export default async function Dashboard() {
   const [jobs, counts, openRequests] = await Promise.all([
     prisma.turnaroundJob.findMany({
       orderBy: { createdAt: "desc" },
-      include: { fluidEnd: true, pressureTest: true },
+      include: { fluidEnd: true, pressureTest: true, extraUnits: true },
       take: 50,
     }),
     prisma.turnaroundJob.groupBy({ by: ["status"], _count: true }),
@@ -102,6 +102,32 @@ export default async function Dashboard() {
                   </tr>
                 );
               })}
+            </tbody>
+          </table>
+        </div>
+      )}
+
+      {jobs.filter((j) => j.status === JOB_STATUS.DRAFT).length > 0 && (
+        <div className="card" style={{ marginBottom: 22 }}>
+          <div className="card-head">
+            <h2>Drafts — pick up where you left off</h2>
+            <span className="badge draft"><span className="d" />{jobs.filter((j) => j.status === JOB_STATUS.DRAFT).length}</span>
+          </div>
+          <table className="grid">
+            <thead>
+              <tr><th>Job</th><th>Serial #</th><th>Customer</th><th>Units</th><th>Started</th><th></th></tr>
+            </thead>
+            <tbody>
+              {jobs.filter((j) => j.status === JOB_STATUS.DRAFT).map((j) => (
+                <tr key={j.id}>
+                  <td><Link href={`/jobs/${j.id}`} className="mono">{j.jobNumber}</Link></td>
+                  <td className="mono">{j.fluidEnd.serialNumber}</td>
+                  <td>{j.fluidEnd.customer}</td>
+                  <td className="small">{j.isBatch ? `${j.extraUnits.length + 1} units` : "1"}</td>
+                  <td className="small muted">{fmtDate(j.createdAt)}</td>
+                  <td className="right"><Link href={`/jobs/${j.id}/edit`} className="btn secondary small">Continue →</Link></td>
+                </tr>
+              ))}
             </tbody>
           </table>
         </div>

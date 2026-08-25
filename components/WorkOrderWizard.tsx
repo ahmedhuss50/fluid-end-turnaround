@@ -1,64 +1,125 @@
 "use client";
 
-import { useRef, useState } from "react";
+import { useEffect, useRef, useState } from "react";
 import Link from "next/link";
-import { createTurnaround } from "@/app/actions";
+import { useRouter } from "next/navigation";
+import { saveWorkOrderDraft } from "@/app/actions";
 import { WEAR_PARTS, CUSTOMERS, DELIVERY_METHOD, OUTCOME } from "@/lib/constants";
-import PressureTestField from "@/components/PressureTestField";
 import NameplateCapture from "@/components/NameplateCapture";
 
+type Extra = { serialNumber: string; manufacturer: string; model: string };
+
 type Prefill = {
+  draftId?: string;
   serial?: string; manufacturer?: string; customer?: string; model?: string;
-  opName?: string; notes?: string; requestId?: string; deliveryMethod?: string;
+  technician?: string; inspectionNotes?: string; notes?: string; outcome?: string;
+  parts?: string[];
+  deliveryMethod?: string; receivedByPsi?: string; releasedByClient?: string;
+  psiName?: string; psiEmail?: string; opName?: string; opEmail?: string;
+  requestId?: string;
+  extras?: Extra[];
 };
 
-const STEPS = ["Units & receiving", "Inspection", "Work performed", "Pressure test", "Sign-off & outcome"];
-
-type Extra = { serialNumber: string; manufacturer: string; model: string };
+// Pressure test is hidden for now (not ready) — re-add "Pressure test" here to restore it.
+const STEPS = ["Units & receiving", "Inspection", "Work performed", "Sign-off & outcome"];
 
 export default function WorkOrderWizard({ prefill }: { prefill?: Prefill }) {
   const sp = prefill || {};
   const fromRequest = !!sp.requestId;
+  const router = useRouter();
   const [step, setStep] = useState(0);
   const [err, setErr] = useState("");
   const formRef = useRef<HTMLFormElement>(null);
   const last = STEPS.length - 1;
 
-  // Optional additional fluid ends → makes this one combined work order.
-  const [extras, setExtras] = useState<Extra[]>([]);
-  const addExtra = () => setExtras((p) => [...p, { serialNumber: "", manufacturer: "", model: "" }]);
-  const setExtra = (i: number, patch: Partial<Extra>) => setExtras((p) => p.map((u, idx) => (idx === i ? { ...u, ...patch } : u)));
-  const removeExtra = (i: number) => setExtras((p) => p.filter((_, idx) => idx !== i));
+  const [extras, setExtras] = useState<Extra[]>(sp.extras || []);
   const unitCount = 1 + extras.length;
+
+  // Auto-save state.
+  const [draftId, setDraftId] = useState(sp.draftId || "");
+  const draftIdRef = useRef(sp.draftId || "");
+  const [saveState, setSaveState] = useState<"idle" | "saving" | "saved" | "error">(sp.draftId ? "saved" : "idle");
+  const chainRef = useRef<Promise<unknown>>(Promise.resolve());
+  const debounceRef = useRef<ReturnType<typeof setTimeout> | null>(null);
 
   const val = (name: string) => {
     const el = formRef.current?.elements.namedItem(name) as HTMLInputElement | null;
     return (el?.value || "").trim();
   };
 
-  function next() {
-    if (step === 0 && (!val("serialNumber") || !val("manufacturer"))) {
-      setErr("Enter at least the serial number and manufacturer.");
-      return;
+  /** Persist the current form (optionally with the nameplate file). Returns the job id, or null if nothing to save yet. */
+  async function doSave(includeFile: boolean): Promise<string | null> {
+    const form = formRef.current;
+    if (!form) return null;
+    if (!val("serialNumber") || !val("manufacturer")) return null; // not enough to persist
+    const fd = new FormData(form);
+    if (!includeFile) fd.delete("nameplatePhoto");
+    fd.set("draftId", draftIdRef.current || "");
+    setSaveState("saving");
+    try {
+      const res = await saveWorkOrderDraft(fd);
+      draftIdRef.current = res.id;
+      setDraftId(res.id);
+      setSaveState("saved");
+      return res.id;
+    } catch {
+      setSaveState("error");
+      return null;
     }
-    if (step === 2 && !val("technician")) {
-      setErr("Enter the PSI technician who performed the work.");
-      return;
-    }
-    setErr("");
-    setStep((s) => Math.min(s + 1, last));
   }
-  function back() { setErr(""); setStep((s) => Math.max(s - 1, 0)); }
+
+  /** Serialize saves so they never overlap; returns the save's result. */
+  function enqueue(includeFile: boolean): Promise<string | null> {
+    const run = chainRef.current.then(() => doSave(includeFile), () => doSave(includeFile)) as Promise<string | null>;
+    chainRef.current = run.then(() => {}, () => {});
+    return run;
+  }
+
+  function scheduleSave() {
+    if (debounceRef.current) clearTimeout(debounceRef.current);
+    debounceRef.current = setTimeout(() => { enqueue(false); }, 1200);
+  }
+  function flushSave() {
+    if (debounceRef.current) clearTimeout(debounceRef.current);
+    enqueue(false);
+  }
+  useEffect(() => () => { if (debounceRef.current) clearTimeout(debounceRef.current); }, []);
+
+  const setExtra = (i: number, patch: Partial<Extra>) => { setExtras((p) => p.map((u, idx) => (idx === i ? { ...u, ...patch } : u))); scheduleSave(); };
+  const addExtra = () => setExtras((p) => [...p, { serialNumber: "", manufacturer: "", model: "" }]);
+  const removeExtra = (i: number) => { setExtras((p) => p.filter((_, idx) => idx !== i)); scheduleSave(); };
+
+  function goStep(n: number) { flushSave(); setErr(""); setStep(Math.max(0, Math.min(n, last))); }
+  function next() {
+    if (step === 0 && (!val("serialNumber") || !val("manufacturer"))) { setErr("Enter at least the serial number and manufacturer."); return; }
+    if (step === 2 && !val("technician")) { setErr("Enter the PSI technician who performed the work."); return; }
+    goStep(step + 1);
+  }
+  const back = () => goStep(step - 1);
   const show = (n: number) => ({ display: step === n ? "block" : "none" });
+
+  /** Explicit save / finalize — persists with the nameplate file, then opens the work order. */
+  async function saveAndOpen() {
+    if (debounceRef.current) clearTimeout(debounceRef.current);
+    const id = await enqueue(true);
+    if (!id) { setErr("Enter at least a serial number and manufacturer to save."); return; }
+    router.push(`/jobs/${id}`);
+  }
+
+  const savedLabel =
+    saveState === "saving" ? "Saving…" : saveState === "saved" ? "Draft saved ✓" : saveState === "error" ? "Save failed — keep going, we’ll retry" : "";
 
   return (
     <>
       <div className="page-head">
         <div>
-          <h1>New work order</h1>
-          <p>Step {step + 1} of {STEPS.length} — {STEPS[step]}{unitCount > 1 ? ` · ${unitCount} units` : ""}</p>
+          <h1>{sp.draftId ? "Edit work order" : "New work order"}</h1>
+          <p>
+            Step {step + 1} of {STEPS.length} — {STEPS[step]}{unitCount > 1 ? ` · ${unitCount} units` : ""}
+            {savedLabel && <span className="small muted" style={{ marginLeft: 10, color: saveState === "error" ? "var(--red)" : "var(--muted)" }}>· {savedLabel}</span>}
+          </p>
         </div>
-        <Link href="/" className="btn secondary">Cancel</Link>
+        <Link href="/" className="btn secondary">Done</Link>
       </div>
 
       {/* Stepper */}
@@ -66,7 +127,7 @@ export default function WorkOrderWizard({ prefill }: { prefill?: Prefill }) {
         {STEPS.map((s, i) => {
           const state = i === step ? "active" : i < step ? "done" : "todo";
           return (
-            <div key={s} onClick={() => i < step && setStep(i)}
+            <div key={s} onClick={() => i < step && goStep(i)}
               style={{
                 display: "flex", alignItems: "center", gap: 8, padding: "8px 14px", borderRadius: 999,
                 border: "1px solid", cursor: i < step ? "pointer" : "default",
@@ -86,12 +147,12 @@ export default function WorkOrderWizard({ prefill }: { prefill?: Prefill }) {
         })}
       </div>
 
-      <form action={createTurnaround} ref={formRef} className="stack">
-        {fromRequest && <input type="hidden" name="requestId" value={sp.requestId} />}
+      <form ref={formRef} className="stack" onSubmit={(e) => { e.preventDefault(); saveAndOpen(); }} onInput={scheduleSave}>
+        {fromRequest && <input type="hidden" name="requestId" defaultValue={sp.requestId} />}
 
         <div className="card">
           <div className="card-body">
-            {/* STEP 0 — Unit & receiving */}
+            {/* STEP 0 — Units & receiving */}
             <div style={show(0)}>
               {fromRequest && (
                 <div className="callout blue" style={{ marginBottom: 18 }}>
@@ -165,11 +226,11 @@ export default function WorkOrderWizard({ prefill }: { prefill?: Prefill }) {
               <div className="grid-2">
                 <div className="field">
                   <label>Released / authorized by (client) — sign</label>
-                  <input type="text" name="releasedByClient" className="sig-input" autoComplete="off" placeholder="Client representative" defaultValue={sp.opName || ""} />
+                  <input type="text" name="releasedByClient" className="sig-input" autoComplete="off" placeholder="Client representative" defaultValue={sp.releasedByClient || sp.opName || ""} />
                 </div>
                 <div className="field">
                   <label>Received by (PSI) — sign</label>
-                  <input type="text" name="receivedByPsi" className="sig-input" autoComplete="off" placeholder="PSI technician taking possession" />
+                  <input type="text" name="receivedByPsi" className="sig-input" autoComplete="off" placeholder="PSI technician taking possession" defaultValue={sp.receivedByPsi || ""} />
                 </div>
               </div>
             </div>
@@ -179,7 +240,7 @@ export default function WorkOrderWizard({ prefill }: { prefill?: Prefill }) {
               <div className="section-label">Inspection</div>
               <div className="field">
                 <label>Incoming inspection findings</label>
-                <textarea name="inspectionNotes" placeholder="Condition on arrival — bore wear, washout, cracks, seat/valve condition, anything noteworthy…" />
+                <textarea name="inspectionNotes" placeholder="Condition on arrival — bore wear, washout, cracks, seat/valve condition, anything noteworthy…" defaultValue={sp.inspectionNotes || ""} />
                 <div className="hint">Recorded on the work order as the inspection stage.</div>
               </div>
             </div>
@@ -189,14 +250,14 @@ export default function WorkOrderWizard({ prefill }: { prefill?: Prefill }) {
               <div className="section-label">Work performed</div>
               <div className="field">
                 <label>PSI technician <span className="req">*</span></label>
-                <input type="text" name="technician" placeholder="Name of the tech who performed the work" />
+                <input type="text" name="technician" placeholder="Name of the tech who performed the work" defaultValue={sp.technician || ""} />
               </div>
               <div className="field">
                 <label>Replaced wear parts</label>
                 <div className="checks">
                   {WEAR_PARTS.map((p) => (
                     <label className="check" key={p.key}>
-                      <input type="checkbox" name="parts" value={p.key} /> {p.label}
+                      <input type="checkbox" name="parts" value={p.key} defaultChecked={sp.parts?.includes(p.key)} /> {p.label}
                     </label>
                   ))}
                 </div>
@@ -207,31 +268,12 @@ export default function WorkOrderWizard({ prefill }: { prefill?: Prefill }) {
               </div>
             </div>
 
-            {/* STEP 3 — Pressure test */}
+            {/* STEP 3 — Sign-off & outcome (pressure test hidden for now) */}
             <div style={show(3)}>
-              <div className="section-label">Pressure test</div>
-              <p className="hint" style={{ marginTop: -8, marginBottom: 14 }}>
-                Run the live test — the achieved pressure, hold time, and result fill in automatically (and stay editable).
-              </p>
-              <PressureTestField />
-              <div className="grid-2">
-                <div className="field">
-                  <label>Instrument / transducer</label>
-                  <input type="text" name="gauge" placeholder="e.g. Transducer #4" />
-                </div>
-                <div className="field">
-                  <label>Tested by</label>
-                  <input type="text" name="testedBy" placeholder="Defaults to the technician" />
-                </div>
-              </div>
-            </div>
-
-            {/* STEP 4 — Sign-off & outcome */}
-            <div style={show(4)}>
               <div className="section-label">Outcome</div>
               <div className="field">
                 <label>Work order outcome</label>
-                <select name="outcome" defaultValue={OUTCOME.READY_DELIVERY}>
+                <select name="outcome" defaultValue={sp.outcome || OUTCOME.READY_DELIVERY}>
                   <option value={OUTCOME.READY_DELIVERY}>Ready for delivery</option>
                   <option value={OUTCOME.READY_PICKUP}>Ready for pickup</option>
                   <option value={OUTCOME.SCRAP}>Scrap — cannot repair</option>
@@ -242,11 +284,11 @@ export default function WorkOrderWizard({ prefill }: { prefill?: Prefill }) {
               <div className="grid-2">
                 <div className="field">
                   <label>PSI signer name</label>
-                  <input type="text" name="psiName" placeholder="Defaults to the technician" />
+                  <input type="text" name="psiName" placeholder="Defaults to the technician" defaultValue={sp.psiName || ""} />
                 </div>
                 <div className="field">
                   <label>PSI signer email</label>
-                  <input type="email" name="psiEmail" placeholder="Optional" />
+                  <input type="email" name="psiEmail" placeholder="Optional" defaultValue={sp.psiEmail || ""} />
                 </div>
               </div>
               <div className="grid-2">
@@ -256,7 +298,7 @@ export default function WorkOrderWizard({ prefill }: { prefill?: Prefill }) {
                 </div>
                 <div className="field">
                   <label>Operator signer email</label>
-                  <input type="email" name="opEmail" placeholder="Optional" />
+                  <input type="email" name="opEmail" placeholder="Optional" defaultValue={sp.opEmail || ""} />
                 </div>
               </div>
               <div className="callout blue">
@@ -269,8 +311,9 @@ export default function WorkOrderWizard({ prefill }: { prefill?: Prefill }) {
             <div className="wrap-actions mt" style={{ justifyContent: "space-between" }}>
               <div>{step > 0 && <button type="button" className="btn secondary" onClick={back}>← Back</button>}</div>
               <div className="wrap-actions">
+                <button type="button" className="btn secondary" onClick={saveAndOpen}>Save draft</button>
                 {step < last && <button type="button" className="btn" onClick={next}>Next →</button>}
-                {step === last && <button type="submit" className="btn">Create work order</button>}
+                {step === last && <button type="submit" className="btn">{sp.draftId ? "Save work order" : "Create work order"}</button>}
               </div>
             </div>
           </div>

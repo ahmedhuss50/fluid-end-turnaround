@@ -47,6 +47,9 @@ export default async function JobDetail({ params }: { params: { id: string } }) 
           </div>
         </div>
         <div className="wrap-actions">
+          {isDraft && !isClient && (
+            <Link href={`/jobs/${job.id}/edit`} className="btn secondary">Edit</Link>
+          )}
           {isDraft && (
             <form action={sendForSignatures.bind(null, job.id)}>
               <button type="submit" className="btn">Send for signatures →</button>

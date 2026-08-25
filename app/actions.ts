@@ -78,15 +78,21 @@ function parseExtraUnits(formData: FormData) {
     .filter((u) => u.serialNumber && u.manufacturer);
 }
 
-/** Create a new turnaround record (status DRAFT) from the intake form. */
-export async function createTurnaround(formData: FormData) {
+/**
+ * Create OR update a DRAFT work order from the intake form. Shared by the
+ * final "Create work order" submit and the wizard's auto-save. Lenient on
+ * purpose (only serial + manufacturer are required) so a half-filled form can
+ * be saved and resumed. Returns the job id.
+ */
+async function persistWorkOrder(formData: FormData): Promise<string> {
+  const draftId = str(formData, "draftId");
   const serialNumber = str(formData, "serialNumber");
   const manufacturer = str(formData, "manufacturer");
-  const customer = str(formData, "customer");
+  const customer = str(formData, "customer") || "Pro Petro";
   const technician = str(formData, "technician");
 
-  if (!serialNumber || !manufacturer || !customer || !technician) {
-    throw new Error("Serial number, manufacturer, customer, and technician are required.");
+  if (!serialNumber || !manufacturer) {
+    throw new Error("Enter at least a serial number and manufacturer.");
   }
 
   const parts = formData.getAll("parts").map(String).filter(Boolean);
@@ -95,32 +101,21 @@ export async function createTurnaround(formData: FormData) {
   const inspectionNotes = str(formData, "inspectionNotes") || null;
   const outcome = str(formData, "outcome") || null;
 
-  // Pressure test
-  const testPressurePsi = parseInt(str(formData, "testPressurePsi") || "0", 10);
-  const holdTimeMinutes = parseInt(str(formData, "holdTimeMinutes") || "0", 10);
-  const result = str(formData, "result") === TEST_RESULT.FAIL ? TEST_RESULT.FAIL : TEST_RESULT.PASS;
-  const gauge = str(formData, "gauge") || null;
-  const testedBy = str(formData, "testedBy") || technician;
-
-  // Signers
-  const psiName = str(formData, "psiName") || technician;
+  const psiName = str(formData, "psiName") || technician || "PSI";
   const psiEmail = str(formData, "psiEmail") || null;
   const opName = str(formData, "opName");
   const opEmail = str(formData, "opEmail") || null;
 
-  // Receiving / chain of custody
   const deliveryMethod = str(formData, "deliveryMethod") || null;
   const receivedByPsi = str(formData, "receivedByPsi") || null;
   const releasedByClient = str(formData, "releasedByClient") || null;
 
-  // Upsert the fluid end (permanent unit record keyed by serial number).
+  // Register the fluid ends (unit registry, keyed by serial number).
   const fluidEnd = await prisma.fluidEnd.upsert({
     where: { serialNumber },
     update: { manufacturer, customer, model: model ?? undefined },
     create: { serialNumber, manufacturer, customer, model },
   });
-
-  // Optional additional fluid ends — makes this a combined (multi-unit) work order.
   const extras = parseExtraUnits(formData).filter((u) => u.serialNumber !== serialNumber);
   for (const u of extras) {
     await prisma.fluidEnd.upsert({
@@ -130,76 +125,89 @@ export async function createTurnaround(formData: FormData) {
     });
   }
 
-  const jobNumber = await nextJobNumber();
+  const scalar = {
+    fluidEndId: fluidEnd.id,
+    isBatch: extras.length > 0,
+    technician,
+    replacedParts: JSON.stringify(parts),
+    notes,
+    inspectionNotes,
+    outcome,
+    deliveryMethod,
+    receivedByPsi,
+    releasedByClient,
+    receivedAt: receivedByPsi ? new Date() : null,
+  };
 
-  const job = await prisma.turnaroundJob.create({
-    data: {
-      jobNumber,
-      fluidEndId: fluidEnd.id,
-      isBatch: extras.length > 0,
-      extraUnits: extras.length > 0
-        ? { create: extras.map((u, i) => ({ serialNumber: u.serialNumber, manufacturer: u.manufacturer, model: u.model, order: i + 1 })) }
-        : undefined,
-      technician,
-      status: JOB_STATUS.DRAFT,
-      replacedParts: JSON.stringify(parts),
-      notes,
-      inspectionNotes,
-      outcome,
-      deliveryMethod,
-      receivedByPsi,
-      releasedByClient,
-      receivedAt: receivedByPsi ? new Date() : null,
-      pressureTest: {
-        create: {
-          testPressurePsi: isNaN(testPressurePsi) ? 0 : testPressurePsi,
-          holdTimeMinutes: isNaN(holdTimeMinutes) ? 0 : holdTimeMinutes,
-          result,
-          gauge,
-          testedBy,
+  const existing = draftId
+    ? await prisma.turnaroundJob.findUnique({ where: { id: draftId }, include: { signatures: true } })
+    : null;
+
+  let jobId: string;
+  if (existing && existing.status === JOB_STATUS.DRAFT) {
+    // Update the existing draft.
+    await prisma.turnaroundJob.update({ where: { id: existing.id }, data: scalar });
+    await prisma.jobUnit.deleteMany({ where: { jobId: existing.id } });
+    if (extras.length) {
+      await prisma.jobUnit.createMany({
+        data: extras.map((u, i) => ({ jobId: existing.id, serialNumber: u.serialNumber, manufacturer: u.manufacturer, model: u.model, order: i + 1 })),
+      });
+    }
+    const psiSig = existing.signatures.find((s) => s.party === PARTY.PSI);
+    const opSig = existing.signatures.find((s) => s.party === PARTY.PRO_PETRO);
+    if (psiSig) await prisma.signature.update({ where: { id: psiSig.id }, data: { signerName: psiName, signerEmail: psiEmail } });
+    if (opSig) await prisma.signature.update({ where: { id: opSig.id }, data: { signerName: opName || "Operator Representative", signerEmail: opEmail } });
+    jobId = existing.id;
+  } else {
+    // Create a new draft.
+    const jobNumber = await nextJobNumber();
+    const job = await prisma.turnaroundJob.create({
+      data: {
+        jobNumber,
+        ...scalar,
+        status: JOB_STATUS.DRAFT,
+        extraUnits: extras.length
+          ? { create: extras.map((u, i) => ({ serialNumber: u.serialNumber, manufacturer: u.manufacturer, model: u.model, order: i + 1 })) }
+          : undefined,
+        signatures: {
+          create: [
+            { party: PARTY.PSI, order: 1, signerName: psiName, signerRole: "PSI Technician", signerEmail: psiEmail, token: newToken() },
+            { party: PARTY.PRO_PETRO, order: 2, signerName: opName || "Operator Representative", signerRole: "Operator Representative", signerEmail: opEmail, token: newToken() },
+          ],
         },
       },
-      signatures: {
-        create: [
-          {
-            party: PARTY.PSI,
-            order: 1,
-            signerName: psiName,
-            signerRole: "PSI Technician",
-            signerEmail: psiEmail,
-            token: newToken(),
-          },
-          {
-            party: PARTY.PRO_PETRO,
-            order: 2,
-            signerName: opName || "Operator Representative",
-            signerRole: "Operator Representative",
-            signerEmail: opEmail,
-            token: newToken(),
-          },
-        ],
-      },
-    },
-  });
+    });
+    jobId = job.id;
+  }
 
-  // Captured nameplate photo (optional).
-  const npKey = await saveNameplate(formData, "job", job.id);
-  if (npKey) await prisma.turnaroundJob.update({ where: { id: job.id }, data: { nameplatePhotoKey: npKey } });
+  // Nameplate photo (only when a file was actually submitted — auto-save omits it).
+  const npKey = await saveNameplate(formData, "job", jobId);
+  if (npKey) await prisma.turnaroundJob.update({ where: { id: jobId }, data: { nameplatePhotoKey: npKey } });
 
-  // If this work order was started from a client repair request, link them.
+  // Link a client repair request if this was started from one.
   const requestId = str(formData, "requestId");
   if (requestId) {
     await prisma.repairRequest
-      .update({
-        where: { id: requestId },
-        data: { status: REQUEST_STATUS.CONVERTED, jobId: job.id },
-      })
+      .update({ where: { id: requestId }, data: { status: REQUEST_STATUS.CONVERTED, jobId } })
       .catch(() => {});
     revalidatePath("/requests");
   }
 
+  return jobId;
+}
+
+/** Auto-save (or explicit "Save draft") — persists the in-progress work order and returns its id. */
+export async function saveWorkOrderDraft(formData: FormData): Promise<{ id: string }> {
+  const id = await persistWorkOrder(formData);
   revalidatePath("/");
-  redirect(`/jobs/${job.id}`);
+  return { id };
+}
+
+/** Finalize the work order from the intake form, then open it. */
+export async function createTurnaround(formData: FormData) {
+  const id = await persistWorkOrder(formData);
+  revalidatePath("/");
+  redirect(`/jobs/${id}`);
 }
 
 /** Submit a client repair request with the client's authorization signature. */
@@ -360,15 +368,18 @@ export async function createBatchWorkOrder(formData: FormData) {
           order: i + 1,
         })),
       },
-      pressureTest: {
-        create: {
-          testPressurePsi: isNaN(testPressurePsi) ? 0 : testPressurePsi,
-          holdTimeMinutes: isNaN(holdTimeMinutes) ? 0 : holdTimeMinutes,
-          result,
-          gauge,
-          testedBy,
-        },
-      },
+      pressureTest:
+        testPressurePsi > 0 || holdTimeMinutes > 0
+          ? {
+              create: {
+                testPressurePsi: isNaN(testPressurePsi) ? 0 : testPressurePsi,
+                holdTimeMinutes: isNaN(holdTimeMinutes) ? 0 : holdTimeMinutes,
+                result,
+                gauge,
+                testedBy,
+              },
+            }
+          : undefined,
       signatures: {
         create: [
           { party: PARTY.PSI, order: 1, signerName: psiName, signerRole: "PSI Technician", signerEmail: psiEmail, token: newToken() },
