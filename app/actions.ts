@@ -110,6 +110,16 @@ async function persistWorkOrder(formData: FormData): Promise<string> {
   const receivedByPsi = str(formData, "receivedByPsi") || null;
   const releasedByClient = str(formData, "releasedByClient") || null;
 
+  // Pressure test — recorded only when a reading was actually entered.
+  const tp = parseInt(str(formData, "testPressurePsi") || "0", 10);
+  const hold = parseInt(str(formData, "holdTimeMinutes") || "0", 10);
+  const testPressurePsi = isNaN(tp) ? 0 : tp;
+  const holdTimeMinutes = isNaN(hold) ? 0 : hold;
+  const result = str(formData, "result") === TEST_RESULT.FAIL ? TEST_RESULT.FAIL : TEST_RESULT.PASS;
+  const gauge = str(formData, "gauge") || null;
+  const testedBy = str(formData, "testedBy") || technician || psiName;
+  const hasTest = testPressurePsi > 0 || holdTimeMinutes > 0;
+
   // Register the fluid ends (unit registry, keyed by serial number).
   const fluidEnd = await prisma.fluidEnd.upsert({
     where: { serialNumber },
@@ -157,6 +167,13 @@ async function persistWorkOrder(formData: FormData): Promise<string> {
     const opSig = existing.signatures.find((s) => s.party === PARTY.PRO_PETRO);
     if (psiSig) await prisma.signature.update({ where: { id: psiSig.id }, data: { signerName: psiName, signerEmail: psiEmail } });
     if (opSig) await prisma.signature.update({ where: { id: opSig.id }, data: { signerName: opName || "Operator Representative", signerEmail: opEmail } });
+    if (hasTest) {
+      await prisma.pressureTest.upsert({
+        where: { jobId: existing.id },
+        update: { testPressurePsi, holdTimeMinutes, result, gauge, testedBy },
+        create: { jobId: existing.id, testPressurePsi, holdTimeMinutes, result, gauge, testedBy },
+      });
+    }
     jobId = existing.id;
   } else {
     // Create a new draft.
@@ -168,6 +185,9 @@ async function persistWorkOrder(formData: FormData): Promise<string> {
         status: JOB_STATUS.DRAFT,
         extraUnits: extras.length
           ? { create: extras.map((u, i) => ({ serialNumber: u.serialNumber, manufacturer: u.manufacturer, model: u.model, order: i + 1 })) }
+          : undefined,
+        pressureTest: hasTest
+          ? { create: { testPressurePsi, holdTimeMinutes, result, gauge, testedBy } }
           : undefined,
         signatures: {
           create: [

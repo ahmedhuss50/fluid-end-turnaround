@@ -6,6 +6,7 @@ import { useRouter } from "next/navigation";
 import { saveWorkOrderDraft } from "@/app/actions";
 import { WEAR_PARTS, CUSTOMERS, DELIVERY_METHOD, OUTCOME } from "@/lib/constants";
 import NameplateCapture from "@/components/NameplateCapture";
+import PressureTestField from "@/components/PressureTestField";
 
 type Extra = { serialNumber: string; manufacturer: string; model: string };
 
@@ -20,8 +21,7 @@ type Prefill = {
   extras?: Extra[];
 };
 
-// Pressure test is hidden for now (not ready) — re-add "Pressure test" here to restore it.
-const STEPS = ["Units & receiving", "Inspection", "Work performed", "Sign-off & outcome"];
+const STEPS = ["Units & receiving", "Inspection", "Work performed", "Pressure test", "Sign-off & outcome"];
 
 export default function WorkOrderWizard({ prefill }: { prefill?: Prefill }) {
   const sp = prefill || {};
@@ -268,8 +268,27 @@ export default function WorkOrderWizard({ prefill }: { prefill?: Prefill }) {
               </div>
             </div>
 
-            {/* STEP 3 — Sign-off & outcome (pressure test hidden for now) */}
+            {/* STEP 3 — Pressure test */}
             <div style={show(3)}>
+              <div className="section-label">Pressure test</div>
+              <p className="hint" style={{ marginTop: -8, marginBottom: 14 }}>
+                Run the live test — the achieved pressure, hold time, and result fill in automatically (and stay editable). For a hardware reading, type the values in directly.
+              </p>
+              <PressureTestField />
+              <div className="grid-2">
+                <div className="field">
+                  <label>Instrument / transducer</label>
+                  <input type="text" name="gauge" placeholder="e.g. Transducer #4" />
+                </div>
+                <div className="field">
+                  <label>Tested by</label>
+                  <input type="text" name="testedBy" placeholder="Defaults to the technician" />
+                </div>
+              </div>
+            </div>
+
+            {/* STEP 4 — Sign-off & outcome */}
+            <div style={show(4)}>
               <div className="section-label">Outcome</div>
               <div className="field">
                 <label>Work order outcome</label>

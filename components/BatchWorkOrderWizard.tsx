@@ -4,11 +4,11 @@ import { useRef, useState } from "react";
 import Link from "next/link";
 import { createBatchWorkOrder } from "@/app/actions";
 import { WEAR_PARTS, DELIVERY_METHOD, OUTCOME } from "@/lib/constants";
+import PressureTestField from "@/components/PressureTestField";
 
 type Unit = { serialNumber: string; manufacturer: string; model: string; problem: string };
 
-// Pressure test hidden for now (not ready) — re-add "Pressure test" here to restore it.
-const STEPS = ["Units & receiving", "Inspection", "Work performed", "Sign-off & outcome"];
+const STEPS = ["Units & receiving", "Inspection", "Work performed", "Pressure test", "Sign-off & outcome"];
 
 export default function BatchWorkOrderWizard({
   batchId,
@@ -178,8 +178,25 @@ export default function BatchWorkOrderWizard({
               </div>
             </div>
 
-            {/* STEP 3 — Sign-off & outcome (pressure test hidden for now) */}
+            {/* STEP 3 — Pressure test (combined) */}
             <div style={show(3)}>
+              <div className="section-label">Pressure test (combined)</div>
+              <p className="hint" style={{ marginTop: -8, marginBottom: 14 }}>One combined test result for the batch. Run the live test, or type the hardware reading in directly.</p>
+              <PressureTestField />
+              <div className="grid-2">
+                <div className="field">
+                  <label>Instrument / transducer</label>
+                  <input type="text" name="gauge" placeholder="e.g. Transducer #4" />
+                </div>
+                <div className="field">
+                  <label>Tested by</label>
+                  <input type="text" name="testedBy" placeholder="Defaults to the technician" />
+                </div>
+              </div>
+            </div>
+
+            {/* STEP 4 — Sign-off & outcome */}
+            <div style={show(4)}>
               <div className="section-label">Outcome</div>
               <div className="field">
                 <label>Batch outcome</label>
