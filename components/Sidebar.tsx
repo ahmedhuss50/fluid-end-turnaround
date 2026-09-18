@@ -36,6 +36,7 @@ export default function Sidebar({ units, active, requests, awaitingSignoff, noti
     { href: "/requests", label: "Repair Requests", count: requests, icon: ICON.requests },
     { href: "/handoffs", label: "Release / Receive", count: null, icon: ICON.handoff },
     { href: "/jobs/new", label: "New Work Order", count: null, icon: ICON.plus },
+    { href: "/pressure-test", label: "Pressure Test", count: null, icon: ICON.gauge },
     { href: "/users", label: "Users & Access", count: null, icon: ICON.users },
   ];
 
