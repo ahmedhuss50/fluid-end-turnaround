@@ -12,7 +12,6 @@ function arc(cx: number, cy: number, r: number, a0: number, a1: number) {
   const s = polar(cx, cy, r, a0);
   const e = polar(cx, cy, r, a1);
   const large = Math.abs(a0 - a1) > 180 ? 1 : 0;
-  // a0 > a1 (left->right over the top), sweep clockwise in screen coords
   return `M ${s.x.toFixed(2)} ${s.y.toFixed(2)} A ${r} ${r} 0 ${large} 1 ${e.x.toFixed(2)} ${e.y.toFixed(2)}`;
 }
 function mmss(sec: number) {
@@ -30,6 +29,16 @@ export default function PressureTest() {
   const [running, setRunning] = useState(false);
   const [, force] = useReducer((x) => x + 1, 0);
 
+  // Live USB (Web Serial) state
+  const [baud, setBaud] = useState(9600);
+  const [serialConnected, setSerialConnected] = useState(false);
+  const [serialErr, setSerialErr] = useState("");
+  const [rawLines, setRawLines] = useState<string[]>([]);
+  const portRef = useRef<any>(null);
+  const readerRef = useRef<any>(null);
+  const keepReadingRef = useRef(false);
+  const supportsSerial = typeof window !== "undefined" && "serial" in (navigator as any);
+
   const sim = useRef<Sim>({ p: 0, tAt: 0, total: 0, hist: [], status: "idle" });
   const canvasRef = useRef<HTMLCanvasElement>(null);
   const wrapRef = useRef<HTMLDivElement>(null);
@@ -40,8 +49,8 @@ export default function PressureTest() {
   );
 
   // config mirror for the loop
-  const cfg = useRef({ target, variance, manual, maxScale });
-  cfg.current = { target: Number(target) || 0, variance: Number(variance) || 0, manual, maxScale };
+  const cfg = useRef({ target, variance, manual, maxScale, mode });
+  cfg.current = { target: Number(target) || 0, variance: Number(variance) || 0, manual, maxScale, mode };
 
   useEffect(() => {
     if (!running) return;
@@ -49,7 +58,10 @@ export default function PressureTest() {
       const s = sim.current;
       const c = cfg.current;
       const dt = 0.1;
-      if (!c.manual) {
+      // In demo mode we simulate the transducer; in live mode the reading comes
+      // from the USB device (readLoop writes sim.current.p), so we only advance
+      // the timers and record history here.
+      if (c.mode === "demo" && !c.manual) {
         const noise = (Math.random() - 0.5) * Math.max(c.variance * 0.9, 40);
         s.p = Math.max(0, s.p + (c.target - s.p) * 0.09 + noise);
       }
@@ -62,6 +74,87 @@ export default function PressureTest() {
     }, 100);
     return () => clearInterval(id);
   }, [running]);
+
+  // ------- Live USB (Web Serial) -------
+  function parseReading(line: string): number | null {
+    // Grab the first number in the line, e.g. "P=14987.2 PSI" -> 14987.2
+    const m = line.match(/-?\d+(\.\d+)?/);
+    return m ? parseFloat(m[0]) : null;
+  }
+
+  async function readLoop(port: any) {
+    keepReadingRef.current = true;
+    let reader: any;
+    try {
+      const decoder: any = new (window as any).TextDecoderStream();
+      port.readable.pipeTo(decoder.writable).catch(() => {});
+      reader = decoder.readable.getReader();
+      readerRef.current = reader;
+      let buf = "";
+      while (keepReadingRef.current) {
+        const { value, done } = await reader.read();
+        if (done) break;
+        if (!value) continue;
+        buf += value;
+        let idx;
+        while ((idx = buf.search(/[\r\n]/)) >= 0) {
+          const line = buf.slice(0, idx).trim();
+          buf = buf.slice(idx + 1);
+          if (!line) continue;
+          setRawLines((prev) => [...prev.slice(-13), line]);
+          const val = parseReading(line);
+          if (val != null && !isNaN(val)) sim.current.p = val;
+        }
+      }
+    } catch (e: any) {
+      if (keepReadingRef.current) setSerialErr(e?.message || "Lost connection to the device.");
+    } finally {
+      try { reader?.releaseLock(); } catch { /* ignore */ }
+    }
+  }
+
+  async function connectSerial() {
+    setSerialErr("");
+    const nav = navigator as any;
+    if (!nav.serial) {
+      setSerialErr("This browser can't read USB devices. Use Google Chrome or Microsoft Edge on a computer (not a tablet or Safari).");
+      return;
+    }
+    try {
+      const port = await nav.serial.requestPort();
+      await port.open({ baudRate: Number(baud) || 9600 });
+      portRef.current = port;
+      setRawLines([]);
+      sim.current = { p: 0, tAt: 0, total: 0, hist: [], status: "testing" };
+      setSerialConnected(true);
+      setRunning(true); // start the timer/chart loop; readings come from USB
+      readLoop(port);
+    } catch (e: any) {
+      // User cancelled the port picker, or the port failed to open.
+      if (e?.name !== "NotFoundError") setSerialErr(e?.message || "Could not open the device.");
+    }
+  }
+
+  async function disconnectSerial() {
+    keepReadingRef.current = false;
+    try { await readerRef.current?.cancel(); } catch { /* ignore */ }
+    try { await portRef.current?.close(); } catch { /* ignore */ }
+    readerRef.current = null;
+    portRef.current = null;
+    setSerialConnected(false);
+    setRunning(false);
+    sim.current.status = sim.current.tAt >= HOLD_TO_PASS ? "pass" : "stopped";
+    force();
+  }
+
+  // Clean up the serial connection if the component unmounts.
+  useEffect(() => {
+    return () => {
+      keepReadingRef.current = false;
+      try { readerRef.current?.cancel(); } catch { /* ignore */ }
+      try { portRef.current?.close(); } catch { /* ignore */ }
+    };
+  }, []);
 
   // draw chart
   useEffect(() => {
@@ -87,7 +180,6 @@ export default function PressureTest() {
     const yFor = (p: number) => padT + (1 - p / max) * plotH;
     const xFor = (t: number) => padL + ((t - tMin) / win) * plotW;
 
-    // grid + y labels
     ctx.font = "11px ui-sans-serif, system-ui";
     ctx.textAlign = "right";
     ctx.textBaseline = "middle";
@@ -103,7 +195,6 @@ export default function PressureTest() {
       ctx.fillText(val.toLocaleString(), padL - 8, y);
     }
 
-    // variance band + target line
     if (c.target > 0) {
       const yTop = yFor(Math.min(max, c.target + c.variance));
       const yBot = yFor(Math.max(0, c.target - c.variance));
@@ -118,7 +209,6 @@ export default function PressureTest() {
       ctx.setLineDash([]);
     }
 
-    // trace
     if (s.hist.length > 1) {
       ctx.strokeStyle = "#2b5bb5";
       ctx.lineWidth = 2;
@@ -129,7 +219,6 @@ export default function PressureTest() {
         else ctx.lineTo(x, y);
       });
       ctx.stroke();
-      // head dot
       const last = s.hist[s.hist.length - 1];
       ctx.fillStyle = "#2b5bb5";
       ctx.beginPath();
@@ -168,7 +257,7 @@ export default function PressureTest() {
   const status = s.status;
   const statusBadge =
     status === "pass" ? <span className="badge pass">Pass · held {HOLD_TO_PASS}s at target</span>
-    : status === "testing" ? <span className="badge awaiting">{withinBand ? "At target" : "Testing…"}</span>
+    : status === "testing" ? <span className="badge awaiting">{withinBand ? "At target" : (mode === "live" ? "Reading…" : "Testing…")}</span>
     : status === "stopped" ? <span className="badge fail">Stopped before hold</span>
     : <span className="badge draft">Idle</span>;
 
@@ -178,19 +267,45 @@ export default function PressureTest() {
         <div>
           <p className="crumb">Operations / Pressure Test</p>
           <h1>Pressure Test</h1>
-          <p>Ramp to target and hold within variance. Demo mode simulates the transducer.</p>
+          <p>Ramp to target and hold within variance. Demo simulates the transducer; Live reads a USB pressure transducer.</p>
         </div>
         <div className="flex">
           <div className="lang" style={{ borderRadius: 10 }}>
             <span className={mode === "demo" ? "on" : ""} onClick={() => setMode("demo")} style={{ cursor: "pointer" }}>Demo</span>
-            <span className={mode === "live" ? "on" : ""} onClick={() => setMode("live")} style={{ cursor: "pointer" }} title="Connect a GP:50 transducer">Live (GP:50)</span>
+            <span className={mode === "live" ? "on" : ""} onClick={() => setMode("live")} style={{ cursor: "pointer" }} title="Read a USB pressure transducer">Live (USB)</span>
           </div>
         </div>
       </div>
 
       {mode === "live" && (
-        <div className="callout amber" style={{ marginBottom: 18 }}>
-          <span><strong>Live mode</strong> connects to a GP:50 pressure transducer, which isn&apos;t wired up yet. Use <strong>Demo</strong> to simulate a test.</span>
+        <div className="card" style={{ marginBottom: 18 }}>
+          <div className="card-head"><h2>USB transducer</h2>{serialConnected ? <span className="badge pass">Connected</span> : <span className="badge draft">Not connected</span>}</div>
+          <div className="card-body">
+            {!supportsSerial && (
+              <div className="callout amber" style={{ marginBottom: 14 }}>
+                <span>This browser can&apos;t read USB devices. Open the portal in <strong>Google Chrome</strong> or <strong>Microsoft Edge</strong> on a computer (Safari, iPhone and iPad are not supported).</span>
+              </div>
+            )}
+            <div className="flex" style={{ gap: 14, alignItems: "flex-end", flexWrap: "wrap" }}>
+              <div className="field" style={{ marginBottom: 0, maxWidth: 180 }}>
+                <label>Baud rate</label>
+                <select value={baud} disabled={serialConnected} onChange={(e) => setBaud(Number(e.target.value))}>
+                  {[9600, 19200, 38400, 57600, 115200].map((b) => <option key={b} value={b}>{b}</option>)}
+                </select>
+              </div>
+              {!serialConnected
+                ? <button className="btn" disabled={!supportsSerial} onClick={connectSerial}>🔌 Connect via USB</button>
+                : <button className="btn" style={{ background: "#6b6b70", borderColor: "#6b6b70" }} onClick={disconnectSerial}>Disconnect</button>}
+            </div>
+            {serialErr && <div className="callout amber" style={{ marginTop: 14 }}><span>{serialErr}</span></div>}
+            <div style={{ marginTop: 14 }}>
+              <div className="small muted" style={{ fontWeight: 700, textTransform: "uppercase", letterSpacing: ".04em", marginBottom: 6 }}>Raw data from device</div>
+              <pre style={{ background: "#1b1b1f", color: "#d7f0dd", borderRadius: 10, padding: 12, fontSize: 12.5, lineHeight: 1.5, minHeight: 90, maxHeight: 180, overflow: "auto", margin: 0, whiteSpace: "pre-wrap" }}>
+                {rawLines.length ? rawLines.join("\n") : (serialConnected ? "Waiting for data…" : "Connect a device to see what it sends.")}
+              </pre>
+              <div className="hint" style={{ marginTop: 6 }}>We read the first number on each line as the pressure. If the readings look wrong, send me a few of these lines and I&apos;ll adjust the parsing to match your transducer.</div>
+            </div>
+          </div>
         </div>
       )}
 
@@ -212,26 +327,36 @@ export default function PressureTest() {
                 </div>
               </div>
 
-              <div className="flex" style={{ gap: 20, marginBottom: 18 }}>
-                <label className="flex" style={{ gap: 8, fontSize: 14, fontWeight: 500, color: "var(--ink-2)", cursor: "pointer" }}>
-                  <input type="checkbox" checked={manual} disabled={running} onChange={(e) => setManual(e.target.checked)} /> Manual test
-                </label>
-                <label className="flex" style={{ gap: 8, fontSize: 14, fontWeight: 500, color: "var(--ink-2)", cursor: "pointer" }}>
-                  <input type="checkbox" onChange={(e) => toggleFull(e.target.checked)} /> Full screen
-                </label>
-              </div>
+              {mode === "demo" && (
+                <div className="flex" style={{ gap: 20, marginBottom: 18 }}>
+                  <label className="flex" style={{ gap: 8, fontSize: 14, fontWeight: 500, color: "var(--ink-2)", cursor: "pointer" }}>
+                    <input type="checkbox" checked={manual} disabled={running} onChange={(e) => setManual(e.target.checked)} /> Manual test
+                  </label>
+                  <label className="flex" style={{ gap: 8, fontSize: 14, fontWeight: 500, color: "var(--ink-2)", cursor: "pointer" }}>
+                    <input type="checkbox" onChange={(e) => toggleFull(e.target.checked)} /> Full screen
+                  </label>
+                </div>
+              )}
 
-              <div className="wrap-actions" style={{ marginBottom: 18 }}>
-                {!running ? (
-                  <button className="btn" onClick={start}>▶ Start test</button>
-                ) : (
-                  <button className="btn" style={{ background: "#6b6b70", borderColor: "#6b6b70" }} onClick={stop}>■ Stop</button>
-                )}
-                <button className="btn secondary" onClick={reset} disabled={running}>Reset</button>
-                {statusBadge}
-              </div>
+              {mode === "demo" && (
+                <div className="wrap-actions" style={{ marginBottom: 18 }}>
+                  {!running ? (
+                    <button className="btn" onClick={start}>▶ Start test</button>
+                  ) : (
+                    <button className="btn" style={{ background: "#6b6b70", borderColor: "#6b6b70" }} onClick={stop}>■ Stop</button>
+                  )}
+                  <button className="btn secondary" onClick={reset} disabled={running}>Reset</button>
+                  {statusBadge}
+                </div>
+              )}
 
-              {manual && running && (
+              {mode === "live" && (
+                <div className="wrap-actions" style={{ marginBottom: 18 }}>
+                  {statusBadge}
+                </div>
+              )}
+
+              {mode === "demo" && manual && running && (
                 <div className="field">
                   <label>Manual pressure — {Math.round(s.p).toLocaleString()} PSI</label>
                   <input type="range" min={0} max={maxScale} step={10} value={Math.round(s.p)}
@@ -250,26 +375,19 @@ export default function PressureTest() {
             {/* Right: gauge */}
             <div style={{ display: "flex", justifyContent: "center" }}>
               <svg viewBox="0 0 320 210" style={{ width: "100%", maxWidth: 380 }}>
-                {/* track */}
                 <path d={arc(160, 150, 118, 180, 0)} fill="none" stroke="#efece4" strokeWidth={22} strokeLinecap="round" />
-                {/* yellow 0..target */}
                 <path d={arc(160, 150, 118, 180, 180 - 180 * targetFrac)} fill="none" stroke="#f2c14e" strokeWidth={22} />
-                {/* red target..max */}
                 <path d={arc(160, 150, 118, 180 - 180 * targetFrac, 0)} fill="none" stroke="#e06456" strokeWidth={22} />
-                {/* green acceptance window */}
                 <path
                   d={arc(160, 150, 118,
                     180 - 180 * Math.min(1, (target + variance) / maxScale),
                     180 - 180 * Math.max(0, (target - variance) / maxScale))}
                   fill="none" stroke="#1e7a46" strokeWidth={22} strokeOpacity={0.9} />
-                {/* ticks/labels */}
                 <text x="42" y="168" fontSize="11" fill="#9a948a">0</text>
                 <text x="150" y="34" fontSize="11" fill="#9a948a" textAnchor="middle">{Math.round(maxScale / 2).toLocaleString()}</text>
                 <text x="286" y="168" fontSize="11" fill="#9a948a" textAnchor="end">{maxScale.toLocaleString()}</text>
-                {/* needle */}
                 <line x1="160" y1="150" x2={needle.x} y2={needle.y} stroke="#1b1b1f" strokeWidth={3.2} strokeLinecap="round" />
                 <circle cx="160" cy="150" r="7" fill="#1b1b1f" />
-                {/* readout */}
                 <text x="160" y="196" textAnchor="middle" fontSize="30" fontWeight="750"
                   fill={withinBand && running ? "#1e7a46" : "#1b1b1f"} fontFamily="ui-monospace, monospace">
                   {Math.round(s.p).toLocaleString()} PSI
