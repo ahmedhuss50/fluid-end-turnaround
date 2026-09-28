@@ -34,6 +34,7 @@ export default function PressureTest() {
   const [serialConnected, setSerialConnected] = useState(false);
   const [serialErr, setSerialErr] = useState("");
   const [rawLines, setRawLines] = useState<string[]>([]);
+  const [cmd, setCmd] = useState("");
   const portRef = useRef<any>(null);
   const readerRef = useRef<any>(null);
   const keepReadingRef = useRef(false);
@@ -123,6 +124,9 @@ export default function PressureTest() {
     try {
       const port = await nav.serial.requestPort();
       await port.open({ baudRate: Number(baud) || 9600 });
+      // Raise the terminal-ready / request-to-send lines — many transducers won't
+      // transmit until these are asserted.
+      try { await port.setSignals({ dataTerminalReady: true, requestToSend: true }); } catch { /* not all ports support this */ }
       portRef.current = port;
       setRawLines([]);
       sim.current = { p: 0, tAt: 0, total: 0, hist: [], status: "testing" };
@@ -145,6 +149,19 @@ export default function PressureTest() {
     setRunning(false);
     sim.current.status = sim.current.tAt >= HOLD_TO_PASS ? "pass" : "stopped";
     force();
+  }
+
+  async function sendCommand() {
+    const port = portRef.current;
+    if (!port || !port.writable) { setSerialErr("Connect a device first."); return; }
+    try {
+      const writer = port.writable.getWriter();
+      await writer.write(new TextEncoder().encode(cmd + "\r\n"));
+      writer.releaseLock();
+      setRawLines((prev) => [...prev.slice(-13), "› sent: " + cmd]);
+    } catch (e: any) {
+      setSerialErr(e?.message || "Could not send to the device.");
+    }
   }
 
   // Clean up the serial connection if the component unmounts.
@@ -304,6 +321,16 @@ export default function PressureTest() {
                 {rawLines.length ? rawLines.join("\n") : (serialConnected ? "Waiting for data…" : "Connect a device to see what it sends.")}
               </pre>
               <div className="hint" style={{ marginTop: 6 }}>We read the first number on each line as the pressure. If the readings look wrong, send me a few of these lines and I&apos;ll adjust the parsing to match your transducer.</div>
+              {serialConnected && (
+                <div className="field" style={{ marginTop: 14, marginBottom: 0 }}>
+                  <label>Send a command to the device (only if it replies when polled)</label>
+                  <div className="flex" style={{ gap: 8 }}>
+                    <input type="text" value={cmd} onChange={(e) => setCmd(e.target.value)} placeholder="e.g. a poll command from the transducer manual" style={{ flex: 1 }} />
+                    <button type="button" className="btn secondary" onClick={sendCommand}>Send</button>
+                  </div>
+                  <div className="hint">Sends your text followed by a carriage return + newline.</div>
+                </div>
+              )}
             </div>
           </div>
         </div>
