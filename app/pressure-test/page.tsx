@@ -77,35 +77,68 @@ export default function PressureTest() {
   }, [running]);
 
   // ------- Live USB (Web Serial) -------
-  function parseReading(line: string): number | null {
-    // Grab the first number in the line, e.g. "P=14987.2 PSI" -> 14987.2
-    const m = line.match(/-?\d+(\.\d+)?/);
-    return m ? parseFloat(m[0]) : null;
+  // Pull the LAST complete number out of an arbitrary chunk of text. "Complete"
+  // means it is followed by something that is not a digit/decimal point (or the
+  // chunk is old enough that more can't be appended to it), so we don't latch a
+  // half-arrived value like "148" from a stream that will become "14872".
+  function lastCompleteNumber(text: string): number | null {
+    const re = /-?\d+(?:\.\d+)?/g;
+    let m: RegExpExecArray | null;
+    let last: { val: string; end: number } | null = null;
+    while ((m = re.exec(text)) !== null) {
+      last = { val: m[0], end: m.index + m[0].length };
+    }
+    if (!last) return null;
+    // If the match runs to the very end of the buffer it may still be growing,
+    // so skip it — the next chunk will complete it.
+    if (last.end >= text.length) return null;
+    const n = parseFloat(last.val);
+    return isNaN(n) ? null : n;
+  }
+
+  // Turn a byte chunk into a short printable preview. If the device streams
+  // binary (non-printable bytes), show hex so we can still see it's alive.
+  function previewChunk(bytes: Uint8Array): string {
+    let printable = 0;
+    for (const b of bytes) if (b === 9 || b === 10 || b === 13 || (b >= 32 && b <= 126)) printable++;
+    const mostlyText = bytes.length === 0 || printable / bytes.length >= 0.8;
+    if (mostlyText) {
+      return new TextDecoder().decode(bytes).replace(/\r/g, "").replace(/\n+/g, "\n");
+    }
+    return "[hex] " + Array.from(bytes).map((b) => b.toString(16).padStart(2, "0")).join(" ");
   }
 
   async function readLoop(port: any) {
     keepReadingRef.current = true;
     let reader: any;
     try {
-      const decoder: any = new (window as any).TextDecoderStream();
-      port.readable.pipeTo(decoder.writable).catch(() => {});
-      reader = decoder.readable.getReader();
+      // Read raw bytes straight off the port (no line-break assumptions).
+      reader = port.readable.getReader();
       readerRef.current = reader;
-      let buf = "";
+      const decoder = new TextDecoder();
+      let textBuf = "";          // rolling decoded text, used for number parsing
+      let rawView = "";          // what we show in the "Raw data" box
+      let sawAny = false;
       while (keepReadingRef.current) {
         const { value, done } = await reader.read();
         if (done) break;
-        if (!value) continue;
-        buf += value;
-        let idx;
-        while ((idx = buf.search(/[\r\n]/)) >= 0) {
-          const line = buf.slice(0, idx).trim();
-          buf = buf.slice(idx + 1);
-          if (!line) continue;
-          setRawLines((prev) => [...prev.slice(-13), line]);
-          const val = parseReading(line);
-          if (val != null && !isNaN(val)) sim.current.p = val;
-        }
+        if (!value || value.length === 0) continue;
+        const bytes = value instanceof Uint8Array ? value : new Uint8Array(value);
+        sawAny = true;
+
+        // Rolling raw view — always shows the device is sending SOMETHING,
+        // whether or not it uses line breaks.
+        rawView = (rawView + previewChunk(bytes)).slice(-600);
+        const lines = rawView.split("\n").filter((l) => l.length).slice(-13);
+        setRawLines(lines.length ? lines : [rawView]);
+
+        // Accumulate decoded text and pull the latest complete number.
+        textBuf = (textBuf + decoder.decode(bytes, { stream: true })).slice(-400);
+        const val = lastCompleteNumber(textBuf);
+        if (val != null) sim.current.p = val;
+      }
+      if (!sawAny && keepReadingRef.current) {
+        setSerialErr("Connected, but the device sent no data. Check the baud rate, or that no other app (e.g. IronTrac) has this COM port open.");
       }
     } catch (e: any) {
       if (keepReadingRef.current) setSerialErr(e?.message || "Lost connection to the device.");
