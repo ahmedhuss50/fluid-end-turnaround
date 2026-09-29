@@ -162,9 +162,10 @@ export default function PressureTest() {
       try { await port.setSignals({ dataTerminalReady: true, requestToSend: true }); } catch { /* not all ports support this */ }
       portRef.current = port;
       setRawLines([]);
-      sim.current = { p: 0, tAt: 0, total: 0, hist: [], status: "testing" };
+      sim.current = { p: 0, tAt: 0, total: 0, hist: [], status: "idle" };
       setSerialConnected(true);
-      setRunning(true); // start the timer/chart loop; readings come from USB
+      // Don't auto-run the timed test on connect — the live number still shows
+      // as data arrives; the operator presses "Start test" when the hold begins.
       readLoop(port);
     } catch (e: any) {
       // User cancelled the port picker, or the port failed to open.
@@ -411,9 +412,23 @@ export default function PressureTest() {
               )}
 
               {mode === "live" && (
-                <div className="wrap-actions" style={{ marginBottom: 18 }}>
-                  {statusBadge}
-                </div>
+                <>
+                  <div className="wrap-actions" style={{ marginBottom: 14 }}>
+                    {!running ? (
+                      <button className="btn" onClick={start}>▶ Start test</button>
+                    ) : (
+                      <button className="btn" style={{ background: "#6b6b70", borderColor: "#6b6b70" }} onClick={stop}>■ Stop</button>
+                    )}
+                    <button className="btn secondary" onClick={reset} disabled={running}>Reset</button>
+                    {statusBadge}
+                  </div>
+                  <div className="field" style={{ maxWidth: 320, marginBottom: 18 }}>
+                    <label>Reading from gauge (PSI){serialConnected ? " — auto-fills if the sensor streams" : ""}</label>
+                    <input type="number" min={0} value={Math.round(s.p)}
+                      onChange={(e) => { sim.current.p = Number(e.target.value); force(); }} />
+                    <div className="hint">Type the number the needle shows if it isn&apos;t reading automatically. The gauge, trace, and hold timer all follow this value.</div>
+                  </div>
+                </>
               )}
 
               {mode === "demo" && manual && running && (
